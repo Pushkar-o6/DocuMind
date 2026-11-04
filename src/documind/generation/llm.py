@@ -138,6 +138,41 @@ class GeminiLLMGenerator:
         logger.info(f"Gemini generated answer ({len(answer)} chars) from {len(results)} chunks")
         return {"answer": answer, "citations": citations, "context_used": context}
 
+    def generate_answer_stream(
+        self,
+        question: str,
+        results: list[HybridResult],
+        temperature: float = 0.1,
+    ):
+        """Stream answer tokens from Gemini."""
+        context, citations = _build_context_and_citations(results)
+        user_prompt = RAG_USER_PROMPT.format(context=context, question=question)
+        full_prompt = f"{RAG_SYSTEM_PROMPT}\n\n{user_prompt}"
+
+        response = self._model.generate_content(
+            full_prompt,
+            generation_config={"temperature": temperature},
+            stream=True,
+        )
+        full_tokens = []
+        for chunk in response:
+            try:
+                token = chunk.text
+                if token:
+                    full_tokens.append(token)
+                    yield {"type": "token", "token": token}
+            except Exception:
+                pass
+
+        final_text = "".join(full_tokens)
+        logger.info(f"Gemini stream completed ({len(final_text)} chars) from {len(results)} chunks")
+        yield {
+            "type": "final",
+            "answer": final_text,
+            "citations": citations,
+            "context_used": context,
+        }
+
     def classify_query(self, question: str) -> str:
         """Classify a query as text, visual, or mixed."""
         raw = self._chat(CLASSIFY_PROMPT.format(question=question), temperature=0.0)
@@ -200,23 +235,71 @@ class OllamaLLMGenerator:
         context, citations = _build_context_and_citations(results)
         user_prompt = RAG_USER_PROMPT.format(context=context, question=question)
 
+        options = {
+            "temperature": temperature,
+            "num_ctx": 2048,
+            "num_predict": 512,
+        }
         response = self.client.chat(
             model=self.model,
             messages=[
                 {"role": "system", "content": RAG_SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
             ],
-            options={"temperature": temperature},
+            options=options,
+            keep_alive="24h",
         )
         answer = response.message.content
         logger.info(f"Ollama generated answer ({len(answer)} chars) from {len(results)} chunks")
         return {"answer": answer, "citations": citations, "context_used": context}
 
+    def generate_answer_stream(
+        self,
+        question: str,
+        results: list[HybridResult],
+        temperature: float = 0.1,
+    ):
+        """Stream answer tokens from Ollama."""
+        context, citations = _build_context_and_citations(results)
+        user_prompt = RAG_USER_PROMPT.format(context=context, question=question)
+
+        options = {
+            "temperature": temperature,
+            "num_ctx": 2048,
+            "num_predict": 512,
+        }
+        stream = self.client.chat(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": RAG_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            options=options,
+            keep_alive="24h",
+            stream=True,
+        )
+        full_tokens = []
+        for chunk in stream:
+            token = chunk.message.content
+            if token:
+                full_tokens.append(token)
+                yield {"type": "token", "token": token}
+
+        final_text = "".join(full_tokens)
+        logger.info(f"Ollama stream completed ({len(final_text)} chars) from {len(results)} chunks")
+        yield {
+            "type": "final",
+            "answer": final_text,
+            "citations": citations,
+            "context_used": context,
+        }
+
     def classify_query(self, question: str) -> str:
         response = self.client.chat(
             model=self.model,
             messages=[{"role": "user", "content": CLASSIFY_PROMPT.format(question=question)}],
-            options={"temperature": 0.0},
+            options={"temperature": 0.0, "num_ctx": 1024, "num_predict": 30},
+            keep_alive="24h",
         )
         classification = response.message.content.strip().lower()
         if "visual" in classification:
@@ -232,7 +315,8 @@ class OllamaLLMGenerator:
                 "role": "user",
                 "content": REFORMULATE_PROMPT.format(original_question=original_question),
             }],
-            options={"temperature": 0.3},
+            options={"temperature": 0.3, "num_ctx": 1024, "num_predict": 100},
+            keep_alive="24h",
         )
         reformulated = response.message.content.strip()
         logger.info(f"Ollama reformulated: '{original_question}' → '{reformulated}'")
@@ -240,6 +324,14 @@ class OllamaLLMGenerator:
 
     def transform_query(self, question: str) -> str:
         """Rewrite and expand raw user query with local LLM prior to retrieval."""
+        words = question.strip().split()
+        vague_words = {"it", "this", "that", "they", "them", "these", "those"}
+        has_vague = any(w.lower().strip("?,.") in vague_words for w in words)
+        # Fast heuristic shortcut: short or direct queries skip LLM rewrite
+        if len(words) <= 7 and not has_vague:
+            logger.info(f"Heuristic router skipped LLM rewrite for concise query: '{question}'")
+            return question
+
         try:
             response = self.client.chat(
                 model=self.model,
@@ -247,7 +339,8 @@ class OllamaLLMGenerator:
                     "role": "user",
                     "content": TRANSFORM_QUERY_PROMPT.format(question=question),
                 }],
-                options={"temperature": 0.1},
+                options={"temperature": 0.1, "num_ctx": 1024, "num_predict": 100},
+                keep_alive="24h",
             )
             transformed = response.message.content.strip()
 

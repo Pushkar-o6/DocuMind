@@ -24,6 +24,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from loguru import logger
 from qdrant_client import models
 
@@ -41,7 +42,7 @@ from documind.ingestion.chunker import DocumentChunker
 from documind.ingestion.embedder import Embedder, get_embedder
 from documind.ingestion.ocr import ocr_pdf_pages
 from documind.ingestion.parser import PDFParser
-from documind.orchestrator.graph import build_pipeline, run_query
+from documind.orchestrator.graph import build_pipeline, run_query, run_query_stream
 from documind.retrieval.reranker import Reranker
 from documind.retrieval.sparse import BM25Index
 from documind.vectorstore.qdrant import QdrantStore
@@ -58,6 +59,18 @@ HASH_REGISTRY_PATH = Path("./storage/doc_hashes.json")
 
 # ── Singleton component cache ──
 _components: dict = {}
+
+# ── In-Memory Exact Match Query Cache (invalidated per corpus mutation) ──
+_query_cache: dict[tuple[str, str | None, int], dict] = {}
+_corpus_version: int = 1
+
+
+def _invalidate_cache():
+    """Invalidate query cache when documents are uploaded or deleted."""
+    global _corpus_version
+    _corpus_version += 1
+    _query_cache.clear()
+    logger.info(f"Query cache invalidated (corpus version: {_corpus_version})")
 
 
 # ── App definition ──
@@ -119,12 +132,36 @@ async def startup():
             bm25.load(BM25_INDEX_PATH)
             logger.info(f"Restored BM25 index from {BM25_INDEX_PATH}")
 
+        # Pre-warm embedder and reranker
+        try:
+            embedder: Embedder = components["embedder"]
+            embedder.embed_text("DocuMind warm-up query")
+            logger.info("Pre-warmed embedder model")
+        except Exception as emb_err:
+            logger.warning(f"Embedder warmup skipped: {emb_err}")
+
         # Pre-warm reranker on CPU so user queries never suffer cold-start latency
         if settings.reranker_enabled:
             components["reranker"]._load_model()
             logger.info("Pre-warmed reranker model on CPU")
 
-        logger.info("All components initialized")
+        # Warm up Ollama LLM and pin in VRAM
+        if settings.using_ollama:
+            try:
+                from ollama import Client as OllamaClient
+                oc = OllamaClient(host=settings.ollama_base_url)
+                logger.info(f"Pinning Ollama LLM ({settings.ollama_llm_model}) in GPU VRAM (keep_alive=24h)...")
+                oc.chat(
+                    model=settings.ollama_llm_model,
+                    messages=[{"role": "user", "content": "ping"}],
+                    options={"temperature": 0.0, "num_ctx": 2048, "num_predict": 5},
+                    keep_alive="24h",
+                )
+                logger.info("Ollama LLM pre-warmed & pinned in GPU VRAM (keep_alive=24h)")
+            except Exception as llm_err:
+                logger.warning(f"Ollama LLM warmup skipped: {llm_err}")
+
+        logger.info("All components initialized and pre-warmed")
     except Exception as e:
         logger.warning(f"Startup initialization incomplete (will recover on first request): {e}")
 
@@ -359,6 +396,7 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
         # Register content hash after successful ingestion
         registry[content_hash] = file.filename
         _save_hash_registry(registry)
+        _invalidate_cache()
 
         return UploadResponse(
             filename=file.filename,
@@ -389,6 +427,25 @@ async def query_documents(request: Request, body: QueryRequest):
     logger.info(f"[{request_id}] Query: {body.question!r}")
     t0 = time.time()
 
+    cache_key = (body.question.strip().lower(), body.source_file, _corpus_version)
+    if cache_key in _query_cache:
+        cached = _query_cache[cache_key]
+        logger.info(f"[{request_id}] Serving query from exact match cache")
+        raw_c = cached.get("citations", [])
+        return QueryResponse(
+            answer=cached["answer"],
+            citations=[Citation(**c) if isinstance(c, dict) else c for c in raw_c],
+            confidence=cached.get("confidence", 0.0),
+            abstained=cached.get("abstained", False),
+            query_type=cached.get("query_type", "text"),
+            retry_count=cached.get("retry_count", 0),
+            request_id=request_id,
+            latency_s=0.01,
+            stage_timings=cached.get("stage_timings", {}),
+            cached=True,
+            error=None,
+        )
+
     try:
         pipeline = get_pipeline()
         result = run_query(
@@ -416,6 +473,17 @@ async def query_documents(request: Request, body: QueryRequest):
             except Exception as citation_err:
                 logger.warning(f"[{request_id}] Skipping malformed citation: {citation_err}")
 
+        # Store in cache
+        _query_cache[cache_key] = {
+            "answer": result["answer"],
+            "citations": raw_citations,
+            "confidence": result["confidence"],
+            "abstained": result["abstained"],
+            "query_type": result["query_type"],
+            "retry_count": result["retry_count"],
+            "stage_timings": result.get("stage_timings", {}),
+        }
+
         return QueryResponse(
             answer=result["answer"],
             citations=citations,
@@ -425,12 +493,77 @@ async def query_documents(request: Request, body: QueryRequest):
             retry_count=result["retry_count"],
             request_id=request_id,
             latency_s=latency_s,
+            stage_timings=result.get("stage_timings", {}),
+            cached=False,
             error=result.get("error"),
         )
 
     except Exception as e:
         logger.error(f"[{request_id}] Query failed: {e}")
         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
+
+
+@app.post("/api/v1/query/stream")
+@app.post("/query/stream", include_in_schema=False)
+async def query_documents_stream(request: Request, body: QueryRequest):
+    """Stream answer generation token-by-token with real-time stage events via SSE."""
+    request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
+    logger.info(f"[{request_id}] Streaming query: {body.question!r}")
+
+    cache_key = (body.question.strip().lower(), body.source_file, _corpus_version)
+    if cache_key in _query_cache:
+        cached = _query_cache[cache_key]
+        logger.info(f"[{request_id}] Serving streaming query from exact match cache")
+
+        async def _cached_stream():
+            yield f"data: {json.dumps({'event': 'stage', 'stage': 'cached', 'message': 'Instant Cache Hit (0ms)'})}\n\n"
+            yield f"data: {json.dumps({'event': 'token', 'token': cached['answer']})}\n\n"
+            final_data = dict(cached)
+            final_data["cached"] = True
+            final_data["latency_s"] = 0.01
+            final_data["request_id"] = request_id
+            yield f"data: {json.dumps({'event': 'final', 'data': final_data})}\n\n"
+
+        return StreamingResponse(
+            _cached_stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Request-ID": request_id},
+        )
+
+    pipeline = get_pipeline()
+
+    async def _sse_streamer():
+        queue: asyncio.Queue = asyncio.Queue()
+        loop = asyncio.get_running_loop()
+
+        def _worker():
+            try:
+                for event in run_query_stream(pipeline, body.question, body.source_file):
+                    loop.call_soon_threadsafe(queue.put_nowait, event)
+            except Exception as exc:
+                logger.error(f"[{request_id}] Streaming error in worker: {exc}")
+                loop.call_soon_threadsafe(queue.put_nowait, {"event": "error", "message": str(exc)})
+            finally:
+                loop.call_soon_threadsafe(queue.put_nowait, None)
+
+        # Offload pipeline stream generation to worker thread
+        loop.run_in_executor(_executor, _worker)
+
+        while True:
+            item = await queue.get()
+            if item is None:
+                break
+            if item.get("event") == "final":
+                data = item.get("data", {})
+                data["request_id"] = request_id
+                _query_cache[cache_key] = data
+            yield f"data: {json.dumps(item)}\n\n"
+
+    return StreamingResponse(
+        _sse_streamer(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Request-ID": request_id},
+    )
 
 
 @app.get("/api/v1/documents", response_model=DocumentListResponse)
@@ -526,6 +659,7 @@ async def clear_documents():
                 except Exception:
                     pass
 
+        _invalidate_cache()
         return {"status": "success", "message": "All documents cleared successfully"}
     except Exception as e:
         logger.error(f"Failed to clear documents: {e}")
@@ -582,6 +716,7 @@ async def delete_document(filename: str):
             except Exception:
                 pass
 
+        _invalidate_cache()
         return {"status": "success", "message": f"Document '{filename}' deleted successfully"}
     except Exception as e:
         logger.error(f"Failed to delete document '{filename}': {e}")

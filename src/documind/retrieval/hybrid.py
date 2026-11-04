@@ -9,6 +9,8 @@ to BM25 search so cross-document contamination is prevented.
 
 from __future__ import annotations
 
+import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 from loguru import logger
@@ -82,22 +84,33 @@ class HybridRetriever:
         Returns:
             List of HybridResult sorted by fused RRF score.
         """
-        # ── Dense retrieval (Qdrant) ──
-        query_embedding = self.embedder.embed_text(query)
-        dense_results = self.qdrant.search(
-            query_embedding=query_embedding,
-            top_k=dense_top_k,
-            source_file=source_file,
-            section_heading=section_heading,
-        )
+        # ── Concurrent Dense & Sparse retrieval ──
+        def _run_dense():
+            t0 = time.perf_counter()
+            query_embedding = self.embedder.embed_text(query)
+            res = self.qdrant.search(
+                query_embedding=query_embedding,
+                top_k=dense_top_k,
+                source_file=source_file,
+                section_heading=section_heading,
+            )
+            return res, round(time.perf_counter() - t0, 3)
 
-        # ── Sparse retrieval (BM25) ──
-        sparse_results = self.bm25.search(
-            query,
-            top_k=sparse_top_k,
-            source_file=source_file,
-            section_heading=section_heading,
-        )
+        def _run_sparse():
+            t0 = time.perf_counter()
+            res = self.bm25.search(
+                query,
+                top_k=sparse_top_k,
+                source_file=source_file,
+                section_heading=section_heading,
+            )
+            return res, round(time.perf_counter() - t0, 3)
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            fut_dense = executor.submit(_run_dense)
+            fut_sparse = executor.submit(_run_sparse)
+            dense_results, dense_time = fut_dense.result()
+            sparse_results, sparse_time = fut_sparse.result()
 
         # ── RRF Fusion ──
         fused: dict[str, HybridResult] = {}

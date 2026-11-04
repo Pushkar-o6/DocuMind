@@ -53,6 +53,8 @@ class QueryResponse(BaseModel):
     retry_count: int = 0
     request_id: str = ""
     latency_s: float = 0.0
+    stage_timings: dict[str, float] = Field(default_factory=dict)
+    cached: bool = False
     error: str | None = None
 
 

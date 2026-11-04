@@ -49,5 +49,9 @@ class PipelineState:
     final_confidence: float = 0.0
     abstained: bool = False  # True if system couldn't ground an answer
 
+    # ── Telemetry & Tracing ──
+    stage_timings: dict[str, float] = field(default_factory=dict)
+    latency_s: float = 0.0
+
     # ── Error handling ──
     error: str | None = None

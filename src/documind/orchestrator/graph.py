@@ -119,6 +119,7 @@ def build_pipeline(
     graph.add_edge("finalize", END)
 
     compiled = graph.compile()
+    compiled._documind_nodes = nodes
     logger.info("LangGraph pipeline compiled successfully")
 
     return compiled
@@ -159,6 +160,7 @@ def run_query(
         "final_citations": [],
         "final_confidence": 0.0,
         "abstained": False,
+        "stage_timings": {},
         "error": None,
     }
 
@@ -171,5 +173,154 @@ def run_query(
         "abstained": result.get("abstained", False),
         "query_type": result.get("query_type", ""),
         "retry_count": result.get("retry_count", 0),
+        "stage_timings": result.get("stage_timings", {}),
+        "latency_s": result.get("latency_s", 0.0),
         "error": result.get("error"),
+    }
+
+
+def run_query_stream(
+    pipeline,
+    question: str,
+    source_file: str | None = None,
+):
+    """Run pipeline query with real-time SSE streaming events.
+
+    Yields:
+        {"event": "stage", "stage": "classifying", "message": "Analyzing & expanding query..."}
+        {"event": "stage", "stage": "retrieving", "message": "Executing parallel hybrid search (dense + sparse)..."}
+        {"event": "stage", "stage": "reranking", "message": "Cross-encoder reranking candidates..."}
+        {"event": "stage", "stage": "generating", "message": "Synthesizing answer from verified evidence..."}
+        {"event": "token", "token": "..."}
+        {"event": "final", "data": {...}}
+    """
+    nodes: PipelineNodes = getattr(pipeline, "_documind_nodes", None)
+    if not nodes:
+        # Fallback to non-streaming invoke
+        res = run_query(pipeline, question, source_file)
+        yield {"event": "token", "token": res["answer"]}
+        yield {"event": "final", "data": res}
+        return
+
+    import time
+    t_start = time.perf_counter()
+    state = {
+        "question": question,
+        "source_file": source_file,
+        "transformed_question": "",
+        "query_type": "",
+        "retrieved_results": [],
+        "reranked_results": [],
+        "answer": "",
+        "citations": [],
+        "context_used": "",
+        "is_grounded": False,
+        "grounding_confidence": 0.0,
+        "grounding_details": {},
+        "retry_count": 0,
+        "max_retries": 2,
+        "reformulated_question": "",
+        "final_answer": "",
+        "final_citations": [],
+        "final_confidence": 0.0,
+        "abstained": False,
+        "stage_timings": {},
+        "error": None,
+    }
+
+    # 1. Classify / Transform
+    yield {"event": "stage", "stage": "classifying", "message": "Analyzing & expanding query..."}
+    state = nodes.classify_query(state)
+
+    # 2. Retrieve (Hybrid Dense + Lexical)
+    yield {"event": "stage", "stage": "retrieving", "message": "Executing parallel hybrid search (Qdrant + BM25)..."}
+    state = nodes.retrieve(state)
+
+    # 3. Cross-Encoder Reranking
+    num_candidates = len(state.get("retrieved_results", []))
+    yield {
+        "event": "stage",
+        "stage": "reranking",
+        "message": f"Cross-encoder reranking {num_candidates} candidates for high precision...",
+    }
+    state = nodes.rerank(state)
+
+    reranked = state.get("reranked_results", [])
+    if not reranked:
+        state["answer"] = "I don't have enough information to answer this question."
+        state["abstained"] = True
+        nodes.finalize(state)
+        yield {"event": "token", "token": state["answer"]}
+        total_latency = round(time.perf_counter() - t_start, 3)
+        state["latency_s"] = total_latency
+        state["stage_timings"]["total_s"] = total_latency
+        yield {
+            "event": "final",
+            "data": {
+                "answer": state["final_answer"],
+                "citations": state["final_citations"],
+                "confidence": state["final_confidence"],
+                "abstained": state["abstained"],
+                "query_type": state["query_type"],
+                "retry_count": 0,
+                "stage_timings": state["stage_timings"],
+                "latency_s": total_latency,
+                "error": None,
+            },
+        }
+        return
+
+    # 4. Synthesizing Answer with live token streaming
+    yield {
+        "event": "stage",
+        "stage": "generating",
+        "message": f"Synthesizing answer from top {len(reranked)} grounded chunks...",
+    }
+    t_gen = time.perf_counter()
+    full_answer_text = ""
+    citations = []
+    context_used = ""
+
+    if hasattr(nodes.generator, "generate_answer_stream"):
+        for item in nodes.generator.generate_answer_stream(question=question, results=reranked):
+            if item.get("type") == "token":
+                yield {"event": "token", "token": item["token"]}
+            elif item.get("type") == "final":
+                full_answer_text = item["answer"]
+                citations = item["citations"]
+                context_used = item["context_used"]
+    else:
+        out = nodes.generator.generate_answer(question=question, results=reranked)
+        full_answer_text = out["answer"]
+        citations = out["citations"]
+        context_used = out["context_used"]
+        yield {"event": "token", "token": full_answer_text}
+
+    state.setdefault("stage_timings", {})["generate_s"] = round(time.perf_counter() - t_gen, 3)
+    state["answer"] = full_answer_text
+    state["citations"] = citations
+    state["context_used"] = context_used
+
+    # 5. Verify & Finalize
+    yield {"event": "stage", "stage": "verifying", "message": "Verifying grounding & citations..."}
+    state = nodes.verify_grounding(state)
+    state = nodes.finalize(state)
+
+    total_latency = round(time.perf_counter() - t_start, 3)
+    state["latency_s"] = total_latency
+    state["stage_timings"]["total_s"] = total_latency
+
+    yield {
+        "event": "final",
+        "data": {
+            "answer": state["final_answer"],
+            "citations": state["final_citations"],
+            "confidence": state["final_confidence"],
+            "abstained": state["abstained"],
+            "query_type": state["query_type"],
+            "retry_count": state.get("retry_count", 0),
+            "stage_timings": state["stage_timings"],
+            "latency_s": total_latency,
+            "error": state.get("error"),
+        },
     }

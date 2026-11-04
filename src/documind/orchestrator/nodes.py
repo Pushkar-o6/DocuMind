@@ -6,6 +6,7 @@ classify → retrieve → rerank → generate → verify → (retry or return).
 
 from __future__ import annotations
 
+import time
 from loguru import logger
 
 from documind.config import settings
@@ -36,6 +37,7 @@ class PipelineNodes:
 
     def classify_query(self, state: dict) -> dict:
         """Classify the query type and transform raw user query for search."""
+        t0 = time.perf_counter()
         try:
             question = state.get("question", "")
             # Fast heuristic classification (0ms overhead)
@@ -54,10 +56,13 @@ class PipelineNodes:
             state["query_type"] = "text"
             state["transformed_question"] = state.get("question", "")
             state["error"] = str(e)
+        finally:
+            state.setdefault("stage_timings", {})["classify_s"] = round(time.perf_counter() - t0, 3)
         return state
 
     def retrieve(self, state: dict) -> dict:
         """Run hybrid retrieval (dense + sparse) with metadata pre-filtering."""
+        t0 = time.perf_counter()
         try:
             # Prefer reformulated question on retries; else transformed question; else raw
             question = (
@@ -79,10 +84,13 @@ class PipelineNodes:
             logger.error(f"Retrieval failed: {e}")
             state["retrieved_results"] = []
             state["error"] = str(e)
+        finally:
+            state.setdefault("stage_timings", {})["retrieve_s"] = round(time.perf_counter() - t0, 3)
         return state
 
     def rerank(self, state: dict) -> dict:
         """Rerank retrieved candidates using cross-encoder for high precision."""
+        t0 = time.perf_counter()
         try:
             results = state.get("retrieved_results", [])
 
@@ -113,10 +121,13 @@ class PipelineNodes:
             logger.error(f"Reranking failed: {e}")
             state["reranked_results"] = state.get("retrieved_results", [])[:5]
             state["error"] = str(e)
+        finally:
+            state.setdefault("stage_timings", {})["rerank_s"] = round(time.perf_counter() - t0, 3)
         return state
 
     def generate(self, state: dict) -> dict:
         """Generate answer from reranked context."""
+        t0 = time.perf_counter()
         try:
             question = state.get("question", "")
             results = state.get("reranked_results", [])
@@ -141,10 +152,13 @@ class PipelineNodes:
             logger.error(f"Generation failed: {e}")
             state["answer"] = "An error occurred during answer generation."
             state["error"] = str(e)
+        finally:
+            state.setdefault("stage_timings", {})["generate_s"] = round(time.perf_counter() - t0, 3)
         return state
 
     def verify_grounding(self, state: dict) -> dict:
         """Verify that the answer is grounded in evidence and citations match retrieved pages."""
+        t0 = time.perf_counter()
         try:
             answer = state.get("answer", "")
             evidence = state.get("context_used", "")
@@ -196,6 +210,8 @@ class PipelineNodes:
             state["is_grounded"] = False
             state["grounding_confidence"] = 0.0
             state["error"] = str(e)
+        finally:
+            state.setdefault("stage_timings", {})["verify_s"] = round(time.perf_counter() - t0, 3)
         return state
 
     def reformulate(self, state: dict) -> dict:
@@ -229,4 +245,10 @@ class PipelineNodes:
             state["final_confidence"] = 0.0
             state["abstained"] = True
             logger.warning("Abstaining: could not ground answer after retries")
+
+        # Sum up stage timings
+        timings = state.setdefault("stage_timings", {})
+        total_time = round(sum(v for k, v in timings.items() if k != "total_s"), 3)
+        timings["total_s"] = total_time
+        state["latency_s"] = total_time
         return state

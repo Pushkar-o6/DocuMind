@@ -412,6 +412,39 @@ def execute_pipeline_query(question: str, source_file: str | None = None) -> dic
         return {"error": str(e)}
 
 
+def execute_pipeline_query_stream(question: str, source_file: str | None = None):
+    """Execute streaming query with live SSE events."""
+    payload = {"question": question}
+    if source_file:
+        payload["source_file"] = source_file
+
+    try:
+        with httpx.stream(
+            "POST",
+            f"{API_BASE_URL}/api/v1/query/stream",
+            json=payload,
+            timeout=180.0,
+        ) as response:
+            if response.status_code != 200:
+                err_text = response.read().decode("utf-8")
+                yield {"event": "error", "message": f"Server returned {response.status_code}: {err_text}"}
+                return
+
+            for line in response.iter_lines():
+                if not line:
+                    continue
+                if line.startswith("data: "):
+                    raw_json = line[6:].strip()
+                    if raw_json:
+                        try:
+                            event_data = json.loads(raw_json)
+                            yield event_data
+                        except Exception:
+                            pass
+    except Exception as e:
+        yield {"event": "error", "message": str(e)}
+
+
 def clear_all_documents() -> bool:
     """Clear vectorstore, BM25, and hash registries."""
     try:
@@ -440,6 +473,8 @@ if "selected_document" not in st.session_state:
     st.session_state.selected_document = None
 if "pending_query" not in st.session_state:
     st.session_state.pending_query = None
+if "telemetry_history" not in st.session_state:
+    st.session_state.telemetry_history = []
 
 
 # ── Top Hero Navigation Bar ──────────────────────────────────────────────────
@@ -693,60 +728,113 @@ with tab_chat:
             st.markdown(f"**{active_prompt}**")
 
         with st.chat_message("assistant", avatar="⚡"):
-            with st.spinner("⚡ Running Two-Stage Retrieval (Dense + BM25 → BGE Reranker → Llama 3.2)..."):
-                start_clock = time.time()
-                api_result = execute_pipeline_query(active_prompt, source_file=st.session_state.selected_document)
-                elapsed = time.time() - start_clock
+            status_box = st.status("⚡ Initializing pipeline...", expanded=True)
+            text_placeholder = st.empty()
+            accumulated_tokens = []
+            final_data = None
+            t0 = time.time()
 
-            if api_result.get("error"):
-                error_content = f"❌ **Pipeline Error:** {api_result['error']}"
-                st.error(error_content)
-                st.session_state.chat_history.append({
-                    "role": "assistant",
-                    "content": error_content,
-                    "citations": [],
-                    "confidence": 0.0,
-                    "latency_s": elapsed,
-                    "query_type": "error",
-                })
-            else:
-                answer = api_result.get("answer", "No answer generated.")
-                citations = api_result.get("citations", [])
-                conf = api_result.get("confidence", 0.0)
-                qtype = api_result.get("query_type", "text")
-                abstained = api_result.get("abstained", False)
+            try:
+                for event in execute_pipeline_query_stream(active_prompt, source_file=st.session_state.selected_document):
+                    ev_type = event.get("event")
+                    if ev_type == "stage":
+                        stage = event.get("stage")
+                        if stage == "classifying":
+                            status_box.update(label="🔍 1/4 Query Analysis & Heuristic Expansion...", state="running")
+                        elif stage == "retrieving":
+                            status_box.update(label="📚 2/4 Parallel Hybrid Search (Dense Qdrant + BM25)...", state="running")
+                        elif stage == "reranking":
+                            status_box.update(label="⚖️ 3/4 Cross-Encoder Precision Reranking (BGE-Reranker)...", state="running")
+                        elif stage == "generating":
+                            status_box.update(label="✍️ 4/4 Synthesizing Grounded Answer...", state="running")
+                        elif stage == "verifying":
+                            status_box.update(label="🛡️ Verifying Grounding & Citation Integrity...", state="running")
+                        elif stage == "cached":
+                            status_box.update(label="⚡ Instant Exact-Match Cache Hit (0ms)", state="complete")
+                    elif ev_type == "token":
+                        token = event.get("token", "")
+                        accumulated_tokens.append(token)
+                        current_text = "".join(accumulated_tokens)
+                        text_placeholder.markdown(f'<div class="answer-container">{current_text}</div>', unsafe_allow_html=True)
+                    elif ev_type == "final":
+                        final_data = event.get("data", {})
+                    elif ev_type == "error":
+                        final_data = {"error": event.get("message", "Unknown pipeline error")}
 
-                if abstained:
-                    st.warning("⚠️ Insufficient context or low reranker score: pipeline strictly abstained from hallucinating.")
+                elapsed = round(time.time() - t0, 2)
+                if not final_data:
+                    final_data = {
+                        "answer": "".join(accumulated_tokens) or "No answer produced.",
+                        "citations": [],
+                        "confidence": 0.5,
+                        "latency_s": elapsed,
+                        "query_type": "text",
+                    }
 
-                st.markdown(f'<div class="answer-container">{answer}</div>', unsafe_allow_html=True)
+                if final_data.get("error"):
+                    status_box.update(label="❌ Pipeline Execution Failed", state="error", expanded=True)
+                    error_content = f"❌ **Pipeline Error:** {final_data['error']}"
+                    st.error(error_content)
+                    st.session_state.chat_history.append({
+                        "role": "assistant",
+                        "content": error_content,
+                        "citations": [],
+                        "confidence": 0.0,
+                        "latency_s": elapsed,
+                        "query_type": "error",
+                    })
+                else:
+                    status_box.update(label=f"✓ Complete in {elapsed:.2f}s", state="complete", expanded=False)
+                    answer = final_data.get("answer", "".join(accumulated_tokens))
+                    citations = final_data.get("citations", [])
+                    conf = final_data.get("confidence", 0.0)
+                    qtype = final_data.get("query_type", "text")
+                    abstained = final_data.get("abstained", False)
 
-                if citations:
-                    with st.expander(f"📎 Verified Citations & Document Evidence ({len(citations)} chunks)", expanded=False):
-                        for cite in citations:
-                            st.markdown(
-                                f"""
-                                <div class="citation-drawer">
-                                    <div class="citation-header">
-                                        <span class="citation-pill">Page {cite.get('page', 1)}</span>
-                                        <span class="citation-doc">📄 {cite.get('source_file', '')}</span>
+                    if abstained:
+                        st.warning("⚠️ Insufficient evidence: pipeline strictly abstained from hallucinating.")
+
+                    if citations:
+                        with st.expander(f"📎 Verified Citations & Document Evidence ({len(citations)} chunks)", expanded=False):
+                            for cite in citations:
+                                st.markdown(
+                                    f"""
+                                    <div class="citation-drawer">
+                                        <div class="citation-header">
+                                            <span class="citation-pill">Page {cite.get('page', 1)}</span>
+                                            <span class="citation-doc">📄 {cite.get('source_file', '')}</span>
+                                        </div>
+                                        <div class="citation-text">
+                                            {cite.get('snippet', '')}
+                                        </div>
                                     </div>
-                                    <div class="citation-text">
-                                        {cite.get('snippet', '')}
-                                    </div>
-                                </div>
-                                """,
-                                unsafe_allow_html=True,
-                            )
+                                    """,
+                                    unsafe_allow_html=True,
+                                )
 
-                st.session_state.chat_history.append({
-                    "role": "assistant",
-                    "content": answer,
-                    "citations": citations,
-                    "confidence": conf,
-                    "latency_s": elapsed,
-                    "query_type": qtype,
-                })
+                    # Save to telemetry history
+                    st.session_state.telemetry_history.append({
+                        "timestamp": time.strftime("%H:%M:%S"),
+                        "query": active_prompt,
+                        "latency_s": final_data.get("latency_s", elapsed),
+                        "cached": final_data.get("cached", False),
+                        "confidence": conf,
+                        "stage_timings": final_data.get("stage_timings", {}),
+                    })
+
+                    st.session_state.chat_history.append({
+                        "role": "assistant",
+                        "content": answer,
+                        "citations": citations,
+                        "confidence": conf,
+                        "latency_s": final_data.get("latency_s", elapsed),
+                        "query_type": qtype,
+                        "stage_timings": final_data.get("stage_timings", {}),
+                        "cached": final_data.get("cached", False),
+                    })
+            except Exception as e:
+                status_box.update(label="❌ Pipeline Error", state="error", expanded=True)
+                st.error(f"Error during streaming: {e}")
             st.rerun()
 
 
@@ -793,8 +881,109 @@ with tab_catalog:
 # ══════════════════════════════════════════════════════════════════════════════
 
 with tab_observability:
-    st.markdown("### ⚡ Retrieval Diagnostics & Ablation Benchmark")
-    st.markdown("Live empirical evaluation metrics on the 30-triple Golden Evaluation Set.")
+    st.markdown("### ⚡ Live Telemetry, Latency Distribution & Ablation Benchmarks")
+    st.markdown("Real-time measured execution latencies (p50, p95, mean) and stage-by-stage waterfall tracing.")
+
+    # 1. Real measured query latencies
+    hist = st.session_state.get("telemetry_history", [])
+    if hist:
+        latencies = [entry["latency_s"] for entry in hist if entry.get("latency_s")]
+        cached_count = sum(1 for entry in hist if entry.get("cached"))
+        cache_rate = f"{(cached_count / len(hist)) * 100:.1f}%"
+        if latencies:
+            latencies_sorted = sorted(latencies)
+            p50 = latencies_sorted[len(latencies_sorted) // 2]
+            p95_idx = int(len(latencies_sorted) * 0.95)
+            p95 = latencies_sorted[min(p95_idx, len(latencies_sorted) - 1)]
+            mean_lat = sum(latencies) / len(latencies)
+        else:
+            p50, p95, mean_lat = 0.0, 0.0, 0.0
+
+        c_m1, c_m2, c_m3, c_m4 = st.columns(4)
+        with c_m1:
+            st.metric("Mean Latency", f"{mean_lat:.2f}s", f"{len(hist)} queries tracked")
+        with c_m2:
+            st.metric("p50 (Median)", f"{p50:.2f}s", "Fast-path")
+        with c_m3:
+            st.metric("p95 Latency", f"{p95:.2f}s", "Tail latency")
+        with c_m4:
+            st.metric("Cache Hit Rate", cache_rate, f"{cached_count} hits")
+
+        st.markdown("---")
+        st.markdown("#### ⏱️ Real Measured Latency Waterfall (Latest Query)")
+        latest = hist[-1]
+        timings = latest.get("stage_timings", {})
+        st.caption(f"**Query:** *'{latest.get('query')}'* | **Total Elapsed:** {latest.get('latency_s', 0):.2f}s | **Cached:** {latest.get('cached', False)}")
+
+        classify_s = timings.get("classify_s", 0.0)
+        retrieve_s = timings.get("retrieve_s", 0.0)
+        rerank_s = timings.get("rerank_s", 0.0)
+        gen_s = timings.get("generate_s", 0.0)
+        verify_s = timings.get("verify_s", 0.0)
+        total_s = max(0.001, latest.get("latency_s", 0.0))
+
+        # CSS Waterfall bars
+        st.markdown(
+            f"""
+            <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                <div style="margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px;">
+                        <span>1. Heuristic Classify / Rewrite</span>
+                        <span style="font-family: monospace; color: #38bdf8;">{classify_s * 1000:.0f} ms ({classify_s:.2f}s)</span>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.06); border-radius: 6px; height: 10px; overflow: hidden;">
+                        <div style="background: #38bdf8; width: {min(100, max(3, (classify_s / total_s) * 100))}%; height: 100%;"></div>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px;">
+                        <span>2. Parallel Hybrid Retrieval (Qdrant Dense + BM25 Lexical)</span>
+                        <span style="font-family: monospace; color: #818cf8;">{retrieve_s * 1000:.0f} ms ({retrieve_s:.2f}s)</span>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.06); border-radius: 6px; height: 10px; overflow: hidden;">
+                        <div style="background: #818cf8; width: {min(100, max(3, (retrieve_s / total_s) * 100))}%; height: 100%;"></div>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px;">
+                        <span>3. Cross-Encoder BGE-Reranker (Top 20 → Top 5)</span>
+                        <span style="font-family: monospace; color: #f59e0b;">{rerank_s * 1000:.0f} ms ({rerank_s:.2f}s)</span>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.06); border-radius: 6px; height: 10px; overflow: hidden;">
+                        <div style="background: #f59e0b; width: {min(100, max(3, (rerank_s / total_s) * 100))}%; height: 100%;"></div>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px;">
+                        <span>4. Llama 3.2:3b Answer Synthesis (Token Streaming)</span>
+                        <span style="font-family: monospace; color: #10b981;">{gen_s * 1000:.0f} ms ({gen_s:.2f}s)</span>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.06); border-radius: 6px; height: 10px; overflow: hidden;">
+                        <div style="background: #10b981; width: {min(100, max(3, (gen_s / total_s) * 100))}%; height: 100%;"></div>
+                    </div>
+                </div>
+
+                <div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px;">
+                        <span>5. Grounding & Citation Verification</span>
+                        <span style="font-family: monospace; color: #ec4899;">{verify_s * 1000:.0f} ms ({verify_s:.2f}s)</span>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.06); border-radius: 6px; height: 10px; overflow: hidden;">
+                        <div style="background: #ec4899; width: {min(100, max(3, (verify_s / total_s) * 100))}%; height: 100%;"></div>
+                    </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        st.info("💡 Run a query in the **Knowledge Workspace** tab to generate live per-stage latency waterfalls and p50/p95 telemetry.")
+
+    st.markdown("---")
+    st.markdown("#### 🔬 Ablation Suite Performance Comparison (30 Golden QA Triples)")
 
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -806,9 +995,6 @@ with tab_observability:
     with col4:
         st.metric("Citation Verification", "100%", "Strict [Page N]")
 
-    st.markdown("---")
-    st.markdown("#### 🔬 Ablation Suite Performance Comparison")
-
     ablation_data = [
         {"Pipeline Variant": "1. Dense Vector Search (`nomic-embed-text`)", "HitRate@1": "72.41%", "Recall@5": "89.66%", "MRR": "0.7799", "nDCG@5": "0.8086"},
         {"Pipeline Variant": "2. Sparse Lexical Search (BM25 Tokenizer)", "HitRate@1": "68.97%", "Recall@5": "96.55%", "MRR": "0.8000", "nDCG@5": "0.8417"},
@@ -816,32 +1002,6 @@ with tab_observability:
         {"Pipeline Variant": "4. Hybrid + BGE Reranker Base (Production)", "HitRate@1": "82.76%", "Recall@5": "96.55%", "MRR": "0.8822", "nDCG@5": "0.9032"},
     ]
     st.table(ablation_data)
-
-    st.markdown("---")
-    st.markdown("#### 🌊 Two-Stage Pipeline Architecture Waterfall")
-    st.markdown("""
-    ```
-    1. User Query ────────► 2. Query Rewrite (Llama 3.2:3b with safety fallback)
-                                    │
-                                    ├───► Nomic-Embed-Text (search_query: prefix) ─► Qdrant Vector Search (Top 20)
-                                    └───► Domain-Aware BM25 Tokenizer ────────────► Sparse Lexical Search (Top 20)
-                                    │
-                                    ▼
-                            3. Reciprocal Rank Fusion (RRF k=60) ────────► 20 Candidates
-                                    │
-                                    ▼
-                            4. BGE-Reranker-Base (CPU Cross-Encoder) ────► Top 5 High-Precision Chunks
-                                    │ (Cutoff: logit >= -4.0)
-                                    ▼
-                            5. Lost-in-the-Middle Context Packing ───────► Chunk 1 First, Chunk 2 Last
-                                    │
-                                    ▼
-                            6. Llama 3.2:3b Answer Synthesis ───────────► Structured Answer + [Page N]
-                                    │
-                                    ▼
-                            7. Deterministic Citation Verification ──────► Verified Grounded Output
-    ```
-    """)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

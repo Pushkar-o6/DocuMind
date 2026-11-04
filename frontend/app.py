@@ -342,10 +342,11 @@ st.markdown("""
 
 # ── API Client Layer ─────────────────────────────────────────────────────────
 
+@st.cache_data(ttl=10)
 def check_system_health() -> dict:
-    """Fetch live backend system status and component health."""
+    """Fetch live backend system status and component health (cached to prevent UI lag)."""
     try:
-        resp = httpx.get(f"{API_BASE_URL}/api/v1/health", timeout=4.0)
+        resp = httpx.get(f"{API_BASE_URL}/api/v1/health", timeout=3.0)
         if resp.status_code == 200:
             return resp.json()
     except Exception:
@@ -360,10 +361,11 @@ def check_system_health() -> dict:
     }
 
 
+@st.cache_data(ttl=10)
 def fetch_indexed_documents() -> list[dict]:
-    """Fetch all indexed documents from vectorstore."""
+    """Fetch all indexed documents from vectorstore (cached to prevent UI lag)."""
     try:
-        resp = httpx.get(f"{API_BASE_URL}/api/v1/documents", timeout=5.0)
+        resp = httpx.get(f"{API_BASE_URL}/api/v1/documents", timeout=3.0)
         if resp.status_code == 200:
             return resp.json().get("documents", [])
     except Exception:
@@ -380,6 +382,7 @@ def upload_pdf_file(file) -> dict:
             timeout=120.0,
         )
         resp.raise_for_status()
+        st.cache_data.clear()
         return resp.json()
     except httpx.HTTPStatusError as e:
         try:
@@ -449,7 +452,10 @@ def clear_all_documents() -> bool:
     """Clear vectorstore, BM25, and hash registries."""
     try:
         resp = httpx.delete(f"{API_BASE_URL}/api/v1/documents", timeout=10.0)
-        return resp.status_code == 200
+        if resp.status_code == 200:
+            st.cache_data.clear()
+            return True
+        return False
     except Exception:
         return False
 
@@ -460,7 +466,10 @@ def delete_document_by_name(filename: str) -> bool:
         import urllib.parse
         encoded = urllib.parse.quote(filename)
         resp = httpx.delete(f"{API_BASE_URL}/api/v1/documents/{encoded}", timeout=10.0)
-        return resp.status_code == 200
+        if resp.status_code == 200:
+            st.cache_data.clear()
+            return True
+        return False
     except Exception:
         return False
 
@@ -763,8 +772,9 @@ with tab_chat:
 
                 elapsed = round(time.time() - t0, 2)
                 if not final_data:
+                    accum_str = "".join(accumulated_tokens).strip()
                     final_data = {
-                        "answer": "".join(accumulated_tokens) or "No answer produced.",
+                        "answer": accum_str or "I could not find sufficient grounded information in the ingested document to answer this query.",
                         "citations": [],
                         "confidence": 0.5,
                         "latency_s": elapsed,
@@ -785,7 +795,10 @@ with tab_chat:
                     })
                 else:
                     status_box.update(label=f"✓ Complete in {elapsed:.2f}s", state="complete", expanded=False)
-                    answer = final_data.get("answer", "".join(accumulated_tokens))
+                    answer = final_data.get("answer") or "".join(accumulated_tokens)
+                    if not answer or not answer.strip():
+                        answer = "I could not find sufficient grounded information in the ingested document to answer this query."
+                    
                     citations = final_data.get("citations", [])
                     conf = final_data.get("confidence", 0.0)
                     qtype = final_data.get("query_type", "text")
@@ -835,7 +848,6 @@ with tab_chat:
             except Exception as e:
                 status_box.update(label="❌ Pipeline Error", state="error", expanded=True)
                 st.error(f"Error during streaming: {e}")
-            st.rerun()
 
 
 # ══════════════════════════════════════════════════════════════════════════════

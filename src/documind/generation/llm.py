@@ -327,9 +327,9 @@ class OllamaLLMGenerator:
         words = question.strip().split()
         vague_words = {"it", "this", "that", "they", "them", "these", "those"}
         has_vague = any(w.lower().strip("?,.") in vague_words for w in words)
-        # Fast heuristic shortcut: short or direct queries skip LLM rewrite
-        if len(words) <= 7 and not has_vague:
-            logger.info(f"Heuristic router skipped LLM rewrite for concise query: '{question}'")
+        # Fast heuristic shortcut: queries with clear intent skip LLM rewrite
+        if len(words) <= 12 and not has_vague:
+            logger.info(f"Heuristic router skipped LLM rewrite for clear query: '{question}'")
             return question
 
         try:

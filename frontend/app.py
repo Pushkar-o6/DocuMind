@@ -11,6 +11,8 @@ Features:
 
 from __future__ import annotations
 
+import html
+import json
 import os
 import time
 from datetime import datetime
@@ -207,18 +209,18 @@ st.markdown("""
         margin-top: 4px;
     }
 
-    /* ── Modern Assistant Answer Box ── */
-    .answer-container {
-        background: rgba(15, 23, 42, 0.7);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-left: 3px solid var(--accent-indigo);
-        border-radius: 12px;
-        padding: 20px 24px;
-        margin-top: 10px;
+    /* ── Modern Assistant Answer Box & Streamlit Chat Bubbles ── */
+    [data-testid="stChatMessage"] {
+        background: rgba(15, 23, 42, 0.65) !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        border-radius: 12px !important;
+        padding: 16px 20px !important;
+        margin-bottom: 12px !important;
+    }
+    [data-testid="stChatMessage"] p, [data-testid="stChatMessage"] div {
         line-height: 1.7;
-        font-size: 0.95rem;
         color: #e2e8f0;
-        box-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.4);
+        font-size: 0.95rem;
     }
 
     /* ── Citation Cards (Small-to-Big) ── */
@@ -626,13 +628,17 @@ with tab_chat:
     with col_p1:
         if st.button(f"💡 {starter_prompts[0]}", use_container_width=True):
             st.session_state.pending_query = starter_prompts[0]
+            st.rerun()
         if st.button(f"💡 {starter_prompts[1]}", use_container_width=True):
             st.session_state.pending_query = starter_prompts[1]
+            st.rerun()
     with col_p2:
         if st.button(f"💡 {starter_prompts[2]}", use_container_width=True):
             st.session_state.pending_query = starter_prompts[2]
+            st.rerun()
         if st.button(f"💡 {starter_prompts[3]}", use_container_width=True):
             st.session_state.pending_query = starter_prompts[3]
+            st.rerun()
 
     st.markdown("---")
 
@@ -646,6 +652,12 @@ with tab_chat:
                 st.session_state.chat_history = []
                 st.rerun()
 
+    # Automatically purge any legacy fallback error messages from chat history
+    st.session_state.chat_history = [
+        m for m in st.session_state.chat_history
+        if m.get("content") and m.get("content") != "I could not find sufficient grounded information in the ingested document to answer this query."
+    ]
+
     # Render Chat History
     for message in st.session_state.chat_history:
         if message["role"] == "user":
@@ -653,8 +665,8 @@ with tab_chat:
                 st.markdown(f"**{message['content']}**")
         else:
             with st.chat_message("assistant", avatar="⚡"):
-                # Answer box
-                st.markdown(f'<div class="answer-container">{message["content"]}</div>', unsafe_allow_html=True)
+                # Render answer directly with native markdown
+                st.markdown(message["content"])
 
                 # Citations Drawer
                 citations = message.get("citations", [])
@@ -662,9 +674,9 @@ with tab_chat:
                     with st.expander(f"📎 Verified Citations & Document Evidence ({len(citations)} chunks)", expanded=False):
                         for idx, cite in enumerate(citations):
                             page_num = cite.get("page", 1)
-                            source_doc = cite.get("source_file", "Document")
-                            section = cite.get("section_heading", "")
-                            snippet = cite.get("snippet", "")
+                            source_doc = html.escape(str(cite.get("source_file", "Document")))
+                            section = html.escape(str(cite.get("section_heading", "")))
+                            snippet = html.escape(str(cite.get("snippet", "")))
                             parent_ctx = cite.get("parent_text", "")
 
                             heading_badge = f'<span style="color: #38bdf8; margin-left: 8px;">§ {section}</span>' if section else ""
@@ -788,7 +800,8 @@ with tab_chat:
                     if not raw_answer:
                         raw_answer = "I could not find sufficient grounded information in the ingested document to answer this query."
 
-                    text_placeholder.markdown(f'<div class="answer-container">{raw_answer}</div>', unsafe_allow_html=True)
+                    # Render answer directly with native markdown
+                    text_placeholder.markdown(raw_answer)
 
                     citations = final_data.get("citations", [])
                     conf = final_data.get("confidence", 0.8)
@@ -802,9 +815,9 @@ with tab_chat:
                         with st.expander(f"📎 Verified Citations & Document Evidence ({len(citations)} chunks)", expanded=False):
                             for cite in citations:
                                 page_num = cite.get("page", 1)
-                                source_doc = cite.get("source_file", "Document")
-                                section = cite.get("section_heading", "")
-                                snippet = cite.get("snippet", "")
+                                source_doc = html.escape(str(cite.get("source_file", "Document")))
+                                section = html.escape(str(cite.get("section_heading", "")))
+                                snippet = html.escape(str(cite.get("snippet", "")))
                                 parent_ctx = cite.get("parent_text", "")
                                 heading_badge = f'<span style="color: #38bdf8; margin-left: 8px;">§ {section}</span>' if section else ""
 

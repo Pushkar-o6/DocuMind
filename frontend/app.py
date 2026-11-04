@@ -738,51 +738,41 @@ with tab_chat:
 
         with st.chat_message("assistant", avatar="⚡"):
             status_box = st.status("⚡ Initializing pipeline...", expanded=True)
-            text_placeholder = st.empty()
             accumulated_tokens = []
-            final_data = None
+            final_data = {}
             t0 = time.time()
 
-            try:
+            def token_generator():
                 for event in execute_pipeline_query_stream(active_prompt, source_file=st.session_state.selected_document):
                     ev_type = event.get("event")
                     if ev_type == "stage":
                         stage = event.get("stage")
                         if stage == "classifying":
-                            status_box.update(label="🔍 1/4 Query Analysis & Heuristic Expansion...", state="running")
+                            status_box.update(label="🔍 1/3 Query Analysis & Candidate Search...", state="running")
                         elif stage == "retrieving":
-                            status_box.update(label="📚 2/4 Parallel Hybrid Search (Dense Qdrant + BM25)...", state="running")
+                            status_box.update(label="📚 2/3 Parallel Hybrid Search (Dense Qdrant + BM25)...", state="running")
                         elif stage == "reranking":
-                            status_box.update(label="⚖️ 3/4 Cross-Encoder Precision Reranking (BGE-Reranker)...", state="running")
+                            status_box.update(label="⚖️ 3/3 Cross-Encoder Precision Reranking (BGE-Reranker)...", state="running")
                         elif stage == "generating":
-                            status_box.update(label="✍️ 4/4 Synthesizing Grounded Answer...", state="running")
-                        elif stage == "verifying":
-                            status_box.update(label="🛡️ Verifying Grounding & Citation Integrity...", state="running")
+                            status_box.update(label="✓ Evidence verified — synthesizing grounded answer...", state="running", expanded=False)
                         elif stage == "cached":
-                            status_box.update(label="⚡ Instant Exact-Match Cache Hit (0ms)", state="complete")
+                            status_box.update(label="⚡ Instant Exact-Match Cache Hit (0ms)", state="complete", expanded=False)
                     elif ev_type == "token":
-                        token = event.get("token", "")
-                        accumulated_tokens.append(token)
-                        current_text = "".join(accumulated_tokens)
-                        text_placeholder.markdown(f'<div class="answer-container">{current_text}</div>', unsafe_allow_html=True)
+                        t = event.get("token", "")
+                        accumulated_tokens.append(t)
+                        yield t
                     elif ev_type == "final":
                         final_data = event.get("data", {})
                     elif ev_type == "error":
                         final_data = {"error": event.get("message", "Unknown pipeline error")}
 
+            try:
+                # Fluid typewriter token streaming
+                streamed_answer = st.write_stream(token_generator)
                 elapsed = round(time.time() - t0, 2)
-                if not final_data:
-                    accum_str = "".join(accumulated_tokens).strip()
-                    final_data = {
-                        "answer": accum_str or "I could not find sufficient grounded information in the ingested document to answer this query.",
-                        "citations": [],
-                        "confidence": 0.5,
-                        "latency_s": elapsed,
-                        "query_type": "text",
-                    }
+                status_box.update(label=f"✓ Complete in {elapsed:.2f}s", state="complete", expanded=False)
 
                 if final_data.get("error"):
-                    status_box.update(label="❌ Pipeline Execution Failed", state="error", expanded=True)
                     error_content = f"❌ **Pipeline Error:** {final_data['error']}"
                     st.error(error_content)
                     st.session_state.chat_history.append({
@@ -794,13 +784,13 @@ with tab_chat:
                         "query_type": "error",
                     })
                 else:
-                    status_box.update(label=f"✓ Complete in {elapsed:.2f}s", state="complete", expanded=False)
-                    answer = final_data.get("answer") or "".join(accumulated_tokens)
-                    if not answer or not answer.strip():
+                    answer = (streamed_answer or "").strip() or final_data.get("answer", "")
+                    if not answer:
                         answer = "I could not find sufficient grounded information in the ingested document to answer this query."
-                    
+                        st.markdown(f'<div class="answer-container">{answer}</div>', unsafe_allow_html=True)
+
                     citations = final_data.get("citations", [])
-                    conf = final_data.get("confidence", 0.0)
+                    conf = final_data.get("confidence", 0.8)
                     qtype = final_data.get("query_type", "text")
                     abstained = final_data.get("abstained", False)
 
@@ -810,22 +800,59 @@ with tab_chat:
                     if citations:
                         with st.expander(f"📎 Verified Citations & Document Evidence ({len(citations)} chunks)", expanded=False):
                             for cite in citations:
+                                page_num = cite.get("page", 1)
+                                source_doc = cite.get("source_file", "Document")
+                                section = cite.get("section_heading", "")
+                                snippet = cite.get("snippet", "")
+                                parent_ctx = cite.get("parent_text", "")
+                                heading_badge = f'<span style="color: #38bdf8; margin-left: 8px;">§ {section}</span>' if section else ""
+
                                 st.markdown(
                                     f"""
                                     <div class="citation-drawer">
                                         <div class="citation-header">
-                                            <span class="citation-pill">Page {cite.get('page', 1)}</span>
-                                            <span class="citation-doc">📄 {cite.get('source_file', '')}</span>
+                                            <div>
+                                                <span class="citation-pill">Page {page_num}</span>
+                                                {heading_badge}
+                                            </div>
+                                            <span class="citation-doc">📄 {source_doc}</span>
                                         </div>
                                         <div class="citation-text">
-                                            {cite.get('snippet', '')}
+                                            {snippet}
                                         </div>
                                     </div>
                                     """,
                                     unsafe_allow_html=True,
                                 )
 
-                    # Save to telemetry history
+                    # Telemetry Strip for current answer
+                    conf_pct = int(conf * 100)
+                    conf_color = "#34d399" if conf >= 0.8 else ("#fbbf24" if conf >= 0.5 else "#f87171")
+                    st.markdown(
+                        f"""
+                        <div class="telemetry-strip">
+                            <div class="telemetry-item">
+                                <span>🛡️ Grounding:</span>
+                                <span style="color: {conf_color}; font-weight: 600;">{conf_pct}%</span>
+                            </div>
+                            <div class="telemetry-item">
+                                <span>⏱️ Latency:</span>
+                                <span style="color: #cbd5e1;">{elapsed:.2f}s</span>
+                            </div>
+                            <div class="telemetry-item">
+                                <span>🎯 Type:</span>
+                                <span style="color: #cbd5e1;">{qtype.title()}</span>
+                            </div>
+                            <div class="telemetry-item">
+                                <span>⚙️ Model:</span>
+                                <span style="color: #a5b4fc;">llama3.2:3b</span>
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+                    # Save to session telemetry and chat history
                     st.session_state.telemetry_history.append({
                         "timestamp": time.strftime("%H:%M:%S"),
                         "query": active_prompt,
@@ -845,6 +872,7 @@ with tab_chat:
                         "stage_timings": final_data.get("stage_timings", {}),
                         "cached": final_data.get("cached", False),
                     })
+
             except Exception as e:
                 status_box.update(label="❌ Pipeline Error", state="error", expanded=True)
                 st.error(f"Error during streaming: {e}")

@@ -1,0 +1,34 @@
+{
+  "Dense_Only": {
+    "HitRate@1": 0.7241,
+    "HitRate@3": 0.8276,
+    "HitRate@5": 0.8966,
+    "MRR": 0.7799,
+    "nDCG@5": 0.8086,
+    "total_queries": 29
+  },
+  "Sparse_Only": {
+    "HitRate@1": 0.6897,
+    "HitRate@3": 0.931,
+    "HitRate@5": 0.9655,
+    "MRR": 0.8,
+    "nDCG@5": 0.8417,
+    "total_queries": 29
+  },
+  "Hybrid_RRF": {
+    "HitRate@1": 0.7931,
+    "HitRate@3": 0.8966,
+    "HitRate@5": 0.8966,
+    "MRR": 0.8391,
+    "nDCG@5": 0.8539,
+    "total_queries": 29
+  },
+  "Hybrid_Plus_Rerank": {
+    "HitRate@1": 0.8276,
+    "HitRate@3": 0.931,
+    "HitRate@5": 0.9655,
+    "MRR": 0.8822,
+    "nDCG@5": 0.9032,
+    "total_queries": 29
+  }
+}

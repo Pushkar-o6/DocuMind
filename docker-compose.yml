@@ -1,0 +1,95 @@
+services:
+  # ── Qdrant Vector Database ──
+  qdrant:
+    image: qdrant/qdrant:v1.20.0   # Matches qdrant-client version installed by pip
+    container_name: documind-qdrant
+    ports:
+      - "7333:6333"   # REST API  (host 7333 → container 6333; Windows reserves 6237-6436)
+      # gRPC (6334) not exposed on host — also in Windows reserved range
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+    healthcheck:
+      # curl/wget are NOT installed in qdrant image — use bash /dev/tcp
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - documind-net
+
+  # ── FastAPI Backend ──
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: documind-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./storage:/app/storage   # BM25 index and hash registry persist here
+      - ./src:/app/src
+    environment:
+      - PYTHONPATH=/app/src
+      # ── Provider & API Keys (from host .env) ──
+      - PROVIDER=${PROVIDER:-gemini}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_EMBED_MODEL=${GEMINI_EMBED_MODEL:-models/gemini-embedding-001}
+      - GEMINI_LLM_MODEL=${GEMINI_LLM_MODEL:-gemini-flash-lite-latest}
+      # ── API ──
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      # ── Qdrant (internal Docker network) ──
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_COLLECTION_NAME=${QDRANT_COLLECTION_NAME:-documind}
+      # ── Ollama (host machine via Docker gateway) ──
+      - OLLAMA_BASE_URL=${DOCKER_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-nomic-embed-text}
+      - OLLAMA_LLM_MODEL=${OLLAMA_LLM_MODEL:-llama3.2:3b}
+      - OLLAMA_VLM_MODEL=${OLLAMA_VLM_MODEL:-moondream}
+      # ── Retrieval & OCR ──
+      - RERANKER_ENABLED=${RERANKER_ENABLED:-false}
+      - RERANKER_MODEL=${RERANKER_MODEL:-BAAI/bge-reranker-base}
+      - OCR_PROVIDER=${OCR_PROVIDER:-gemini}
+      # ── Ingestion ──
+      - CHUNK_SIZE=${CHUNK_SIZE:-512}
+      - CHUNK_OVERLAP=${CHUNK_OVERLAP:-64}
+      - MAX_PAGES=${MAX_PAGES:-500}
+      # ── Paths ──
+      - UPLOAD_DIR=/app/data/uploads
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      qdrant:
+        condition: service_healthy   # Wait for Qdrant to be actually ready
+    restart: unless-stopped
+    networks:
+      - documind-net
+
+  # ── Streamlit Frontend ──
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: documind-frontend
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./frontend:/app/frontend
+    environment:
+      - API_BASE_URL=http://backend:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - documind-net
+
+volumes:
+  qdrant_data:
+    driver: local
+
+networks:
+  documind-net:
+    driver: bridge

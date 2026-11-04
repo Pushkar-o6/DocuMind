@@ -1,0 +1,50 @@
+FROM python:3.11-slim
+
+# Prevent Python from writing .pyc files and enable unbuffered logging
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# Install system dependencies for OCR, PDF processing, and image handling
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    poppler-utils \
+    libgl1 \
+    libglib2.0-0 \
+    curl \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy project definition and source code
+COPY pyproject.toml README.md ./
+COPY src/ src/
+
+# Layer 1: upgrade pip (tiny, changes rarely)
+RUN pip install --no-cache-dir --upgrade pip
+
+# Layer 2: PyTorch CPU — cached separately so code changes don't re-download it
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+
+# Layer 3: project dependencies
+RUN pip install --no-cache-dir .
+
+# ── Pre-download the cross-encoder reranker model at build time ──
+# This eliminates the cold-start delay on first query.
+# The model is cached to /root/.cache/huggingface inside the image layer.
+RUN python -c "from sentence_transformers import CrossEncoder; CrossEncoder('BAAI/bge-reranker-base', max_length=512)"
+
+# Create required directories for persistent uploads and vector storage
+RUN mkdir -p data/uploads storage
+
+# Expose FastAPI backend port
+EXPOSE 8000
+
+# Container healthcheck — waits for /health to return 200
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Launch FastAPI app with Uvicorn
+# Single worker to keep the in-memory BM25 index consistent
+CMD ["uvicorn", "documind.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

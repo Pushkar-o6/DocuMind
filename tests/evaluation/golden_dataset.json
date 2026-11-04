@@ -1,0 +1,243 @@
+[
+  {
+    "id": "gold_01",
+    "question": "What is Pushkar Rewar's contact email address?",
+    "expected_source": "Pushkar_Rewar_CV_ATS.pdf",
+    "expected_page": 1,
+    "expected_keywords": ["pushkarrewar@gmail.com"],
+    "reference_answer": "Pushkar Rewar's contact email is pushkarrewar@gmail.com."
+  },
+  {
+    "id": "gold_02",
+    "question": "What is Pushkar's phone number?",
+    "expected_source": "Pushkar_Rewar_CV_ATS.pdf",
+    "expected_page": 1,
+    "expected_keywords": ["7009095200"],
+    "reference_answer": "Pushkar Rewar's mobile number is +91 7009095200."
+  },
+  {
+    "id": "gold_03",
+    "question": "Which programming languages are listed in Pushkar's CV?",
+    "expected_source": "Pushkar_Rewar_CV_ATS.pdf",
+    "expected_page": 1,
+    "expected_keywords": ["Java", "Python", "JavaScript", "C++"],
+    "reference_answer": "Pushkar's programming languages include Java, Python, JavaScript, C, and C++."
+  },
+  {
+    "id": "gold_04",
+    "question": "What university did Pushkar attend for his degree?",
+    "expected_source": "Pushkar_Rewar_CV_ATS.pdf",
+    "expected_page": 1,
+    "expected_keywords": ["Lovely Professional University", "LPU"],
+    "reference_answer": "Pushkar attended Lovely Professional University (LPU)."
+  },
+  {
+    "id": "gold_05",
+    "question": "What training did Pushkar complete at the Center for Professional Enhancement?",
+    "expected_source": "Pushkar_Rewar_CV_ATS.pdf",
+    "expected_page": 1,
+    "expected_keywords": ["AIx Code", "Applied AI", "Machine Learning"],
+    "reference_answer": "He completed the 'AIx Code - Applied AI & Machine Learning Training' at the Center for Professional Enhancement, LPU."
+  },
+  {
+    "id": "gold_06",
+    "question": "What machine learning libraries are mentioned in Pushkar's training technologies?",
+    "expected_source": "Pushkar_Rewar_CV_ATS.pdf",
+    "expected_page": 1,
+    "expected_keywords": ["TensorFlow", "PyTorch", "Scikit-learn"],
+    "reference_answer": "Technologies mentioned include Python, TensorFlow, PyTorch, Scikit-learn, Pandas, NumPy, Matplotlib, and Seaborn."
+  },
+  {
+    "id": "gold_07",
+    "question": "What school is listed in Pushkar's education history?",
+    "expected_source": "Pushkar_Rewar_CV_ATS.pdf",
+    "expected_page": 1,
+    "expected_keywords": ["Kamla Nehru Public School"],
+    "reference_answer": "Kamla Nehru Public School is listed for his secondary education."
+  },
+  {
+    "id": "gold_08",
+    "question": "What soft skills are highlighted on Pushkar's CV?",
+    "expected_source": "Pushkar_Rewar_CV_ATS.pdf",
+    "expected_page": 1,
+    "expected_keywords": ["Problem-Solving", "Team Player", "Adaptability"],
+    "reference_answer": "The listed soft skills are Problem-Solving, Team Player, and Adaptability."
+  },
+  {
+    "id": "gold_09",
+    "question": "What is the job title in the Fisher Jordan job description?",
+    "expected_source": "JDData AnalystFisher Jordan.pdf",
+    "expected_page": 1,
+    "expected_keywords": ["Analyst", "Sr. Analyst"],
+    "reference_answer": "The job description is for Analyst / Sr. Analyst at Fisher Jordan."
+  },
+  {
+    "id": "gold_10",
+    "question": "What time zones do analysts work with according to the Fisher Jordan JD?",
+    "expected_source": "JDData AnalystFisher Jordan.pdf",
+    "expected_page": 1,
+    "expected_keywords": ["US", "time-zones"],
+    "reference_answer": "Working closely with US-based clients across US time-zones."
+  },
+  {
+    "id": "gold_11",
+    "question": "What programming languages are required for solving business problems at Fisher Jordan?",
+    "expected_source": "JDData AnalystFisher Jordan.pdf",
+    "expected_page": 1,
+    "expected_keywords": ["Python", "SQL"],
+    "reference_answer": "The role requires employing programming methodologies in Python and SQL."
+  },
+  {
+    "id": "gold_12",
+    "question": "How are LLMs and generative AI tools utilized in the Fisher Jordan role?",
+    "expected_source": "JDData AnalystFisher Jordan.pdf",
+    "expected_page": 1,
+    "expected_keywords": ["LLMs", "generative AI", "business models"],
+    "reference_answer": "Using LLMs and other generative AI tools to solve cutting-edge business problems and redefine existing business models."
+  },
+  {
+    "id": "gold_13",
+    "question": "What responsibilities are stated regarding data extraction and validation at Fisher Jordan?",
+    "expected_source": "JDData AnalystFisher Jordan.pdf",
+    "expected_page": 1,
+    "expected_keywords": ["data extraction", "validation", "data dictionaries"],
+    "reference_answer": "Identifying information sources, understanding database structures and data dictionaries to develop the optimal approach for data extraction, validation, and combination."
+  },
+  {
+    "id": "gold_14",
+    "question": "Who authored the term paper on Servant Leadership in Scrum?",
+    "expected_source": "Servant_Leadership_in_Scrum_Term_Paper_Rewritten.pdf",
+    "expected_page": 1,
+    "expected_keywords": ["Pushkar", "Lovely Professional University"],
+    "reference_answer": "Pushkar from the Department of Computer Science and Engineering, Lovely Professional University."
+  },
+  {
+    "id": "gold_15",
+    "question": "What does Section II and Section III cover in the Scrum term paper?",
+    "expected_source": "Servant_Leadership_in_Scrum_Term_Paper_Rewritten.pdf",
+    "expected_page": 1,
+    "expected_keywords": ["Section II", "background", "Section III"],
+    "reference_answer": "Section II covers background concepts and Section III explains the review approach."
+  },
+  {
+    "id": "gold_16",
+    "question": "According to Proposition P1, what is Scrum Master servant leadership positively related to?",
+    "expected_source": "Servant_Leadership_in_Scrum_Term_Paper_Rewritten.pdf",
+    "expected_page": 5,
+    "expected_keywords": ["P1", "psychological empowerment", "autonomy", "self-determination"],
+    "reference_answer": "Scrum Master servant leadership is positively related to team psychological empowerment, mainly by supporting autonomy and self-determination."
+  },
+  {
+    "id": "gold_17",
+    "question": "What is the relation between servant leadership, psychological safety, and performance in Proposition P2?",
+    "expected_source": "Servant_Leadership_in_Scrum_Term_Paper_Rewritten.pdf",
+    "expected_page": 5,
+    "expected_keywords": ["P2", "psychological safety", "reflexivity"],
+    "reference_answer": "Servant leadership raises team psychological safety, improving reflexivity and performance, though safety alone is not sufficient for performance."
+  },
+  {
+    "id": "gold_18",
+    "question": "What does Proposition P3 state about collaborative culture and knowledge sharing?",
+    "expected_source": "Servant_Leadership_in_Scrum_Term_Paper_Rewritten.pdf",
+    "expected_page": 5,
+    "expected_keywords": ["P3", "collaborative culture", "knowledge sharing"],
+    "reference_answer": "Servant leadership improves performance through collaborative culture; the mediating role of knowledge sharing is conditional."
+  },
+  {
+    "id": "gold_19",
+    "question": "Explain Proposition P4 and the concept of the 'leadership gap' from the Bosch studies.",
+    "expected_source": "Servant_Leadership_in_Scrum_Term_Paper_Rewritten.pdf",
+    "expected_page": 5,
+    "expected_keywords": ["P4", "team maturity", "leadership gap", "Bosch"],
+    "reference_answer": "As teams mature, servant leadership shifts from direct facilitation to opening a leadership gap; a Scrum Master retaining leadership functions suppresses empowerment."
+  },
+  {
+    "id": "gold_20",
+    "question": "What cultural factor is identified in Proposition P5 as moderating servant leadership outcomes?",
+    "expected_source": "Servant_Leadership_in_Scrum_Term_Paper_Rewritten.pdf",
+    "expected_page": 5,
+    "expected_keywords": ["P5", "power distance", "Cultural context"],
+    "reference_answer": "Cultural context, such as power distance, moderates the relation between servant leadership and team outcomes."
+  },
+  {
+    "id": "gold_21",
+    "question": "According to Proposition P6, under what conditions does empowerment convert into performance?",
+    "expected_source": "Servant_Leadership_in_Scrum_Term_Paper_Rewritten.pdf",
+    "expected_page": 5,
+    "expected_keywords": ["P6", "delivery", "stakeholder feedback", "responsiveness"],
+    "reference_answer": "Empowerment converts into performance only when team practices keep delivery and stakeholder feedback tight (responsiveness, continuous improvement)."
+  },
+  {
+    "id": "gold_22",
+    "question": "What is depicted in Figure 2 of the Scrum term paper?",
+    "expected_source": "Servant_Leadership_in_Scrum_Term_Paper_Rewritten.pdf",
+    "expected_page": 6,
+    "expected_keywords": ["Fig. 2", "leadership transfer", "maturity"],
+    "reference_answer": "Conceptual illustration of leadership transfer from the Scrum Master to the team as maturity grows."
+  },
+  {
+    "id": "gold_23",
+    "question": "What is outlined in Table VI in the term paper?",
+    "expected_source": "Servant_Leadership_in_Scrum_Term_Paper_Rewritten.pdf",
+    "expected_page": 6,
+    "expected_keywords": ["TABLE VI", "Stage-Based Playbook", "Scrum Master"],
+    "reference_answer": "A stage-based playbook for the Scrum Master across Early, Developing, and Mature team stages."
+  },
+  {
+    "id": "gold_24",
+    "question": "What is the focus of the Scrum Master during the Early stage in Table VI?",
+    "expected_source": "Servant_Leadership_in_Scrum_Term_Paper_Rewritten.pdf",
+    "expected_page": 6,
+    "expected_keywords": ["Early", "Teach the events", "no-blame", "impediments", "Sprint Goal"],
+    "reference_answer": "Teach the events, build a no-blame climate, remove impediments, and keep the Sprint Goal visible."
+  },
+  {
+    "id": "gold_25",
+    "question": "What hypothetical data is analyzed in Table VIII on page 8 of the term paper?",
+    "expected_source": "Servant_Leadership_in_Scrum_Term_Paper_Rewritten.pdf",
+    "expected_page": 8,
+    "expected_keywords": ["TABLE VIII", "servant-leadership score", "effectiveness score"],
+    "reference_answer": "A hypothetical team-level servant-leadership score and effectiveness score comparing teams."
+  },
+  {
+    "id": "gold_26",
+    "question": "What dimensions of psychological empowerment are synthesized in Table II?",
+    "expected_source": "Servant_Leadership_in_Scrum_Term_Paper_Rewritten.pdf",
+    "expected_page": 3,
+    "expected_keywords": ["TABLE II", "Empowerment dimension", "humility", "Sprint"],
+    "reference_answer": "Table II connects typical Scrum Master practices with empowerment dimensions such as providing direction and humility."
+  },
+  {
+    "id": "gold_27",
+    "question": "What is the author's argument regarding whether Scrum works across different teams in Section II?",
+    "expected_source": "Servant_Leadership_in_Scrum_Term_Paper_Rewritten.pdf",
+    "expected_page": 2,
+    "expected_keywords": ["Scrum works", "leadership is exercised", "autonomy"],
+    "reference_answer": "How well Scrum works depends strongly on how leadership is exercised and how team autonomy is cultivated."
+  },
+  {
+    "id": "gold_28",
+    "question": "What empirical research findings are summarized in Table III on page 4?",
+    "expected_source": "Servant_Leadership_in_Scrum_Term_Paper_Rewritten.pdf",
+    "expected_page": 4,
+    "expected_keywords": ["TABLE III", "Summary of Key Empirical"],
+    "reference_answer": "Table III presents a summary of key empirical studies examining servant leadership and team performance."
+  },
+  {
+    "id": "gold_29",
+    "question": "Which citation [11] by Hoda et al. is cited on page 9 of the term paper?",
+    "expected_source": "Servant_Leadership_in_Scrum_Term_Paper_Rewritten.pdf",
+    "expected_page": 9,
+    "expected_keywords": ["Hoda", "Self-organizing roles", "IEEE"],
+    "reference_answer": "R. Hoda, J. Noble, and S. Marshall, 'Self-organizing roles on agile software development teams', IEEE Trans. Software Engineering."
+  },
+  {
+    "id": "gold_30",
+    "question": "What is the exact net profit of Apple in 1984 in the documents?",
+    "expected_source": "None",
+    "expected_page": null,
+    "expected_keywords": [],
+    "reference_answer": "I don't have enough information in the provided documents to answer this question."
+  }
+]
+

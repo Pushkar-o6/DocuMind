@@ -1,0 +1,82 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "documind"
+version = "0.1.0"
+description = "Agentic multimodal RAG for visually rich enterprise documents"
+requires-python = ">=3.11"
+readme = "README.md"
+
+dependencies = [
+    # --- Core ---
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "python-dotenv>=1.0",
+
+    # --- PDF Ingestion ---
+    "pymupdf>=1.24",           # PDF parsing (PyMuPDF / fitz)
+    "pymupdf4llm>=0.0.10",     # Layout-aware markdown extraction
+    "pytesseract>=0.3.10",     # OCR fallback
+    "Pillow>=10.0",            # Image handling
+
+    # --- Text Processing ---
+    "langchain>=0.3",
+    "langchain-community>=0.3",
+    "langchain-text-splitters>=0.3",
+
+    # --- Embeddings & Vector Store ---
+    "langchain-ollama>=0.2",   # Ollama integration for LangChain
+    "qdrant-client>=1.10",     # Qdrant vector database client
+    "langchain-qdrant>=0.1",   # LangChain <-> Qdrant bridge
+    "rank-bm25>=0.2.2",        # BM25 sparse retrieval
+
+    # --- Reranking ---
+    "sentence-transformers>=3.0",  # For bge-reranker-base
+
+    # --- LLM & Orchestration ---
+    "langgraph>=0.2",          # Agentic orchestration
+    "ollama>=0.3",             # Ollama Python client
+    "google-generativeai>=0.8",# Google Gemini Cloud API (fast cloud embeddings & LLM)
+
+    # --- API ---
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "python-multipart>=0.0.9", # File upload support
+
+    # --- Utilities ---
+    "loguru>=0.7",             # Better logging
+    "httpx>=0.27",             # Async HTTP client
+    "tqdm>=4.66",              # Progress bars
+]
+
+[project.optional-dependencies]
+frontend = [
+    "streamlit>=1.38",
+    "streamlit-pdf-viewer>=0.0.7",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.6",               # Linter + formatter
+    "pre-commit>=3.8",
+]
+eval = [
+    "ragas>=0.2",              # RAG evaluation framework
+    "datasets>=2.0",           # Hugging Face datasets
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/documind"]

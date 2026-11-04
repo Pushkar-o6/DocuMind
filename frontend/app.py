@@ -738,11 +738,12 @@ with tab_chat:
 
         with st.chat_message("assistant", avatar="⚡"):
             status_box = st.status("⚡ Initializing pipeline...", expanded=True)
+            text_placeholder = st.empty()
             accumulated_tokens = []
             final_data = {}
             t0 = time.time()
 
-            def token_generator():
+            try:
                 for event in execute_pipeline_query_stream(active_prompt, source_file=st.session_state.selected_document):
                     ev_type = event.get("event")
                     if ev_type == "stage":
@@ -760,20 +761,19 @@ with tab_chat:
                     elif ev_type == "token":
                         t = event.get("token", "")
                         accumulated_tokens.append(t)
-                        yield t
+                        # Render markdown continuously as tokens stream
+                        text_placeholder.markdown("".join(accumulated_tokens) + " ▌")
                     elif ev_type == "final":
-                        final_data = event.get("data", {})
+                        final_data.update(event.get("data", {}))
                     elif ev_type == "error":
-                        final_data = {"error": event.get("message", "Unknown pipeline error")}
+                        final_data["error"] = event.get("message", "Unknown pipeline error")
 
-            try:
-                # Fluid typewriter token streaming
-                streamed_answer = st.write_stream(token_generator)
                 elapsed = round(time.time() - t0, 2)
                 status_box.update(label=f"✓ Complete in {elapsed:.2f}s", state="complete", expanded=False)
 
                 if final_data.get("error"):
                     error_content = f"❌ **Pipeline Error:** {final_data['error']}"
+                    text_placeholder.empty()
                     st.error(error_content)
                     st.session_state.chat_history.append({
                         "role": "assistant",
@@ -784,10 +784,11 @@ with tab_chat:
                         "query_type": "error",
                     })
                 else:
-                    answer = (streamed_answer or "").strip() or final_data.get("answer", "")
-                    if not answer:
-                        answer = "I could not find sufficient grounded information in the ingested document to answer this query."
-                        st.markdown(f'<div class="answer-container">{answer}</div>', unsafe_allow_html=True)
+                    raw_answer = "".join(accumulated_tokens).strip() or final_data.get("answer", "").strip()
+                    if not raw_answer:
+                        raw_answer = "I could not find sufficient grounded information in the ingested document to answer this query."
+
+                    text_placeholder.markdown(f'<div class="answer-container">{raw_answer}</div>', unsafe_allow_html=True)
 
                     citations = final_data.get("citations", [])
                     conf = final_data.get("confidence", 0.8)
@@ -864,7 +865,7 @@ with tab_chat:
 
                     st.session_state.chat_history.append({
                         "role": "assistant",
-                        "content": answer,
+                        "content": raw_answer,
                         "citations": citations,
                         "confidence": conf,
                         "latency_s": final_data.get("latency_s", elapsed),

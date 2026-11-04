@@ -323,49 +323,8 @@ class OllamaLLMGenerator:
         return reformulated
 
     def transform_query(self, question: str) -> str:
-        """Rewrite and expand raw user query with local LLM prior to retrieval."""
-        words = question.strip().split()
-        vague_words = {"it", "this", "that", "they", "them", "these", "those"}
-        has_vague = any(w.lower().strip("?,.") in vague_words for w in words)
-        # Any query with 2 or more words that isn't purely vague pronouns goes straight to search
-        if len(words) >= 2 and not has_vague:
-            logger.info(f"Using direct user query (no rewrite needed): '{question}'")
-            return question
-
-        try:
-            response = self.client.chat(
-                model=self.model,
-                messages=[{
-                    "role": "user",
-                    "content": TRANSFORM_QUERY_PROMPT.format(question=question),
-                }],
-                options={"temperature": 0.1, "num_ctx": 1024, "num_predict": 100},
-                keep_alive="24h",
-            )
-            transformed = response.message.content.strip()
-
-            # Handle 3B model conversational artifacts or refusals
-            refusal_triggers = [
-                "i can't", "i cannot", "i am sorry", "i'm sorry", "as an ai",
-                "here is the rewritten", "rewritten search query", "i made the following"
-            ]
-            lower = transformed.lower()
-            if any(trig in lower for trig in refusal_triggers) or len(transformed.splitlines()) > 3:
-                # If the LLM wrapped the query in quotation marks within commentary, extract it
-                import re
-                quotes = re.findall(r'"([^"]+)"', transformed)
-                if quotes and not any(trig in quotes[0].lower() for trig in refusal_triggers):
-                    clean_query = quotes[0].strip()
-                    logger.info(f"Ollama extracted search query from explanation: '{clean_query}'")
-                    return clean_query
-                logger.info(f"Ollama rewrite triggered refusal/verbose commentary; falling back to: '{question}'")
-                return question
-
-            logger.info(f"Ollama query transformed: '{question}' → '{transformed}'")
-            return transformed
-        except Exception as e:
-            logger.warning(f"Ollama query transformation failed ({e}), using original query")
-            return question
+        """Query cleaner: preserves user question intent without hallucinating rewrites."""
+        return question.strip()
 
 
 # ── Backward-compat alias & factory ─────────────────────────────────────────

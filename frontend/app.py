@@ -1,14 +1,15 @@
-"""DocuMind Enterprise — Intelligent Document Intelligence & Multimodal Precision RAG.
+"""DocuMind Enterprise — Next-Gen Multimodal PDF Intelligence & Precision RAG Platform.
 
-Production-Grade Enterprise Interface designed by Senior UI/UX Design System.
-Architecture:
-- High-Performance Titanium Glassmorphism Design System (Plus Jakarta Sans, Inter, JetBrains Mono)
-- Multi-Tab Executive Hub:
-    1. 💬 Intelligence Workspace (Chat & Token-by-Token Streaming RAG)
-    2. 📑 Document Catalog (Corpus Inventory & Management)
-    3. 📊 Observability & APM (Real Waterfall Timings, Latency Percentiles, Ablation Benchmarks)
-    4. ⚙️ System Architecture (4GB VRAM Budget & Multi-Layer Defense Guardrails)
-- Small-to-Big Citation Inspection & Grounding Telemetry
+Industry-grade UI/UX designed by Principal Design Systems Architect.
+Features:
+- Ultra-Modern Dark Titanium & Obsidian Glassmorphism Design System
+- Top Navigation App-Bar with Real-time Engine Telemetry & Health Pulsing Beacon
+- Empty-State Interactive Hero with Categorized Exploration Chips
+- Live SSE Token Streaming with Visual Pipeline Stepper (Analysis → Hybrid Search → Rerank → Synthesis)
+- Interactive Small-to-Big Citation Evidence Cards & Grounding Score Gauges
+- Full APM Latency Waterfall Tracing (p50, p95, Mean) & Golden Dataset Benchmarks
+- Document Catalog Management (Chunk counts, single file purge, retrieval scoping)
+- 4GB VRAM Architecture & Multi-Layer Anti-Hallucination Guardrails
 """
 
 from __future__ import annotations
@@ -34,316 +35,324 @@ st.set_page_config(
 # ── Environment & Config ─────────────────────────────────────────────────────
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 
-# ── High-End Titanium Glassmorphism Design System ────────────────────────────
+# ── Ultra-Modern Titanium & Obsidian Design System ───────────────────────────
 st.markdown("""
 <style>
     /* Google Fonts */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
     :root {
-        --bg-main: #070a12;
-        --bg-surface-1: #0d1322;
-        --bg-surface-2: #141c30;
-        --bg-surface-card: rgba(18, 26, 44, 0.72);
-        --bg-glass-elevated: rgba(23, 33, 56, 0.85);
-        --border-subtle: rgba(255, 255, 255, 0.08);
-        --border-medium: rgba(255, 255, 255, 0.14);
-        --border-active: rgba(99, 102, 241, 0.45);
-        --accent-indigo: #6366f1;
-        --accent-indigo-light: #818cf8;
-        --accent-cyan: #06b6d4;
-        --accent-cyan-light: #38bdf8;
-        --accent-emerald: #10b981;
-        --accent-amber: #f59e0b;
-        --accent-rose: #f43f5e;
-        --text-primary: #f8fafc;
-        --text-secondary: #94a3b8;
+        --bg-void: #030712;
+        --bg-surface-0: #080d1a;
+        --bg-surface-1: #0f172a;
+        --bg-surface-2: #1e293b;
+        --bg-card: rgba(15, 23, 42, 0.75);
+        --bg-card-hover: rgba(30, 41, 59, 0.85);
+        --border-subtle: rgba(255, 255, 255, 0.07);
+        --border-bright: rgba(255, 255, 255, 0.15);
+        --border-accent: rgba(99, 102, 241, 0.5);
+        --brand-indigo: #6366f1;
+        --brand-violet: #8b5cf6;
+        --brand-cyan: #06b6d4;
+        --brand-emerald: #10b981;
+        --brand-amber: #f59e0b;
+        --brand-rose: #f43f5e;
+        --text-headline: #f8fafc;
+        --text-body: #cbd5e1;
         --text-muted: #64748b;
     }
 
-    /* Base App Styling */
+    /* Global Viewport Reset */
     .stApp {
-        background: radial-gradient(circle at 10% 8%, rgba(99, 102, 241, 0.12) 0%, transparent 45%),
-                    radial-gradient(circle at 90% 92%, rgba(6, 182, 212, 0.09) 0%, transparent 45%),
-                    #070a12;
-        color: var(--text-primary);
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        background-color: var(--bg-void) !important;
+        background-image: 
+            radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+            radial-gradient(at 100% 0%, rgba(6, 182, 212, 0.12) 0px, transparent 50%),
+            radial-gradient(at 50% 100%, rgba(139, 92, 246, 0.08) 0px, transparent 60%);
+        color: var(--text-headline) !important;
+        font-family: 'Inter', -apple-system, sans-serif !important;
     }
 
-    /* Subtle Sleek Scrollbar */
-    ::-webkit-scrollbar {
-        width: 6px;
-        height: 6px;
-    }
-    ::-webkit-scrollbar-track {
-        background: rgba(0, 0, 0, 0.25);
-    }
-    ::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.16);
-        border-radius: 4px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-        background: rgba(99, 102, 241, 0.5);
-    }
+    /* Scrollbars */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(3, 7, 18, 0.6); }
+    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 999px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--brand-indigo); }
 
-    /* Top Executive Header */
-    .documind-header {
-        background: linear-gradient(135deg, rgba(20, 28, 48, 0.9) 0%, rgba(13, 19, 34, 0.95) 100%);
-        backdrop-filter: blur(18px);
-        -webkit-backdrop-filter: blur(18px);
-        border: 1px solid var(--border-subtle);
-        border-radius: 16px;
-        padding: 20px 28px;
-        margin-bottom: 22px;
+    /* Top Executive Navigation Bar */
+    .app-navbar {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        box-shadow: 0 16px 36px -12px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        padding: 16px 24px;
+        background: rgba(15, 23, 42, 0.8);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid var(--border-subtle);
+        border-radius: 16px;
+        margin-bottom: 24px;
+        box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.7);
     }
-
-    .brand-title-box h1 {
-        font-family: 'Plus Jakarta Sans', sans-serif;
-        font-weight: 800;
-        font-size: 1.85rem;
-        margin: 0;
-        padding: 0;
-        background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 50%, #818cf8 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        letter-spacing: -0.03em;
-        line-height: 1.2;
-    }
-
-    .brand-subtitle {
-        color: var(--text-secondary);
-        font-size: 0.85rem;
-        font-weight: 400;
-        margin-top: 4px;
-        letter-spacing: 0.01em;
-    }
-
-    .header-pills-row {
+    .brand-cluster {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 14px;
+    }
+    .brand-icon {
+        width: 42px;
+        height: 42px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, #6366f1 0%, #06b6d4 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+        box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+    }
+    .brand-title-text {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        font-size: 1.55rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 60%, #818cf8 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        line-height: 1.1;
+        margin: 0;
+    }
+    .brand-edition-tag {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        background: rgba(99, 102, 241, 0.18);
+        border: 1px solid rgba(99, 102, 241, 0.35);
+        color: #a5b4fc;
+        padding: 2px 7px;
+        border-radius: 4px;
+        margin-left: 8px;
+        vertical-align: middle;
+    }
+    .brand-motto {
+        color: var(--text-muted);
+        font-size: 0.78rem;
+        margin-top: 2px;
+    }
+    .nav-telemetry-cluster {
+        display: flex;
+        align-items: center;
+        gap: 10px;
         flex-wrap: wrap;
     }
-
-    .status-pill {
+    .telemetry-chip {
         display: inline-flex;
         align-items: center;
-        gap: 8px;
-        padding: 6px 14px;
+        gap: 7px;
+        padding: 6px 12px;
         border-radius: 9999px;
-        font-size: 0.76rem;
+        font-size: 0.73rem;
         font-weight: 600;
-        letter-spacing: 0.03em;
-        text-transform: uppercase;
-        background: rgba(255, 255, 255, 0.04);
+        background: rgba(30, 41, 59, 0.6);
         border: 1px solid var(--border-subtle);
         color: #e2e8f0;
+        font-family: 'JetBrains Mono', monospace;
     }
-
-    .status-pill-online {
+    .telemetry-chip-live {
         background: rgba(16, 185, 129, 0.12);
         border-color: rgba(16, 185, 129, 0.35);
         color: #34d399;
     }
-
-    .status-pill-offline {
+    .telemetry-chip-offline {
         background: rgba(244, 63, 94, 0.12);
         border-color: rgba(244, 63, 94, 0.35);
         color: #fb7185;
     }
-
-    .pulse-beacon {
-        width: 8px;
-        height: 8px;
-        background: #10b981;
+    .pulse-dot-green {
+        width: 7px;
+        height: 7px;
         border-radius: 50%;
-        box-shadow: 0 0 10px #10b981;
-        animation: pulseAnimation 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+        background-color: #10b981;
+        box-shadow: 0 0 8px #10b981;
+        animation: pulseEffect 2s infinite ease-in-out;
     }
-
-    @keyframes pulseAnimation {
+    @keyframes pulseEffect {
         0%, 100% { opacity: 1; transform: scale(1); }
-        50% { opacity: 0.4; transform: scale(1.25); }
+        50% { opacity: 0.35; transform: scale(1.3); }
     }
 
-    /* Tabs Styling */
+    /* Modern Tabs Customization */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 10px;
-        background: rgba(13, 19, 34, 0.5);
-        padding: 6px 10px;
-        border-radius: 12px;
-        border: 1px solid var(--border-subtle);
-        margin-bottom: 24px;
+        background: rgba(15, 23, 42, 0.7) !important;
+        border: 1px solid var(--border-subtle) !important;
+        padding: 5px !important;
+        border-radius: 12px !important;
+        gap: 6px !important;
+        margin-bottom: 24px !important;
     }
-
     .stTabs [data-baseweb="tab"] {
-        height: 42px;
-        border-radius: 8px;
-        padding: 0 20px;
-        font-weight: 600;
-        font-size: 0.9rem;
-        color: var(--text-secondary);
+        height: 40px !important;
+        border-radius: 8px !important;
+        padding: 0 18px !important;
+        font-family: 'Plus Jakarta Sans', sans-serif !important;
+        font-weight: 600 !important;
+        font-size: 0.87rem !important;
+        color: var(--text-muted) !important;
         border: none !important;
-        background: transparent;
-        transition: all 0.2s ease;
+        background: transparent !important;
+        transition: all 0.2s ease !important;
     }
-
     .stTabs [data-baseweb="tab"]:hover {
-        color: var(--text-primary);
-        background: rgba(255, 255, 255, 0.04);
+        color: var(--text-headline) !important;
+        background: rgba(255, 255, 255, 0.04) !important;
     }
-
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(6, 182, 212, 0.15) 100%) !important;
         color: #ffffff !important;
-        border: 1px solid var(--border-active) !important;
-        box-shadow: 0 4px 16px -4px rgba(99, 102, 241, 0.3);
+        border: 1px solid var(--border-accent) !important;
+        box-shadow: 0 4px 14px rgba(99, 102, 241, 0.25) !important;
     }
 
-    /* Sidebar Refinement */
+    /* Sidebar Clean Styling */
     [data-testid="stSidebar"] {
-        background: #090e1c !important;
-        border-right: 1px solid var(--border-subtle);
+        background-color: #080d1a !important;
+        border-right: 1px solid var(--border-subtle) !important;
     }
-
-    .sidebar-section-title {
+    .sidebar-heading {
         font-family: 'Plus Jakarta Sans', sans-serif;
-        font-size: 0.78rem;
+        font-size: 0.72rem;
         font-weight: 700;
-        letter-spacing: 0.08em;
         text-transform: uppercase;
-        color: var(--accent-indigo-light);
-        margin: 20px 0 10px 0;
-        display: flex;
-        align-items: center;
-        gap: 6px;
+        letter-spacing: 0.09em;
+        color: #818cf8;
+        margin: 20px 0 8px 0;
     }
 
-    /* Document Item Pill */
-    .doc-tree-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 10px 14px;
-        background: rgba(20, 28, 48, 0.6);
-        border: 1px solid var(--border-subtle);
-        border-radius: 8px;
+    /* Empty State Hero Welcome Box */
+    .empty-hero-container {
+        text-align: center;
+        padding: 38px 24px 28px 24px;
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.5) 0%, rgba(8, 13, 26, 0.8) 100%);
+        border: 1px dashed rgba(99, 102, 241, 0.3);
+        border-radius: 18px;
+        margin-bottom: 24px;
+    }
+    .empty-hero-title {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        font-size: 1.8rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 50%, #38bdf8 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
         margin-bottom: 8px;
-        font-size: 0.82rem;
-        transition: all 0.2s ease;
     }
-    .doc-tree-item:hover {
-        background: rgba(25, 36, 60, 0.9);
-        border-color: rgba(99, 102, 241, 0.3);
+    .empty-hero-desc {
+        color: var(--text-muted);
+        font-size: 0.92rem;
+        max-width: 620px;
+        margin: 0 auto 20px auto;
+        line-height: 1.5;
     }
 
-    /* Citation Box */
+    /* Citation Card */
     .citation-card {
-        background: rgba(14, 21, 38, 0.7);
+        background: rgba(15, 23, 42, 0.75);
         border: 1px solid var(--border-subtle);
-        border-left: 3px solid var(--accent-indigo);
-        border-radius: 8px;
+        border-left: 3px solid var(--brand-indigo);
+        border-radius: 10px;
         padding: 14px 18px;
         margin: 10px 0;
-        transition: all 0.2s ease;
+        transition: transform 0.15s ease, border-color 0.15s ease;
     }
     .citation-card:hover {
-        border-color: var(--border-active);
-        box-shadow: 0 6px 18px -4px rgba(0, 0, 0, 0.4);
+        border-color: var(--border-bright);
+        border-left-color: var(--brand-cyan);
+        transform: translateY(-1px);
     }
-    .citation-header {
+    .citation-header-row {
         display: flex;
         justify-content: space-between;
         align-items: center;
         margin-bottom: 8px;
-        font-size: 0.78rem;
     }
-    .page-chip {
-        background: rgba(99, 102, 241, 0.18);
+    .page-badge {
+        background: rgba(99, 102, 241, 0.2);
         color: #a5b4fc;
         padding: 3px 10px;
         border-radius: 4px;
         font-family: 'JetBrains Mono', monospace;
+        font-size: 0.74rem;
         font-weight: 600;
     }
-    .source-chip {
+    .source-badge {
         color: #94a3b8;
-        font-size: 0.78rem;
         font-family: 'JetBrains Mono', monospace;
+        font-size: 0.75rem;
     }
-    .citation-body {
+    .citation-snippet-text {
         font-size: 0.86rem;
-        color: #cbd5e1;
-        line-height: 1.55;
-        font-family: 'Inter', sans-serif;
+        color: #e2e8f0;
+        line-height: 1.6;
     }
 
-    /* Telemetry Pill Strip */
-    .telemetry-row {
+    /* Telemetry Strip */
+    .telemetry-strip {
         display: flex;
         align-items: center;
-        gap: 10px;
-        background: rgba(11, 16, 30, 0.85);
+        gap: 12px;
+        padding: 8px 14px;
+        background: rgba(8, 13, 26, 0.9);
         border: 1px solid var(--border-subtle);
         border-radius: 8px;
-        padding: 6px 14px;
-        margin-top: 10px;
+        margin-top: 12px;
         flex-wrap: wrap;
-        font-size: 0.76rem;
+        font-size: 0.74rem;
     }
-    .telemetry-node {
+    .telemetry-item {
         display: flex;
         align-items: center;
         gap: 6px;
-        color: var(--text-secondary);
+        color: var(--text-muted);
     }
-    .telemetry-val {
+    .telemetry-number {
         font-family: 'JetBrains Mono', monospace;
         font-weight: 600;
         color: #f1f5f9;
     }
 
-    /* KPI Metric Cards */
-    .kpi-card {
-        background: linear-gradient(135deg, rgba(20, 28, 48, 0.8) 0%, rgba(13, 19, 34, 0.9) 100%);
+    /* Document Row in Catalog */
+    .catalog-row {
+        background: rgba(15, 23, 42, 0.6);
         border: 1px solid var(--border-subtle);
         border-radius: 12px;
-        padding: 18px;
-        box-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.4);
+        padding: 18px 22px;
+        margin-bottom: 12px;
+        transition: all 0.2s ease;
     }
-    .kpi-label {
-        color: var(--text-secondary);
-        font-size: 0.8rem;
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-    .kpi-value {
-        font-family: 'Plus Jakarta Sans', sans-serif;
-        font-size: 1.75rem;
-        font-weight: 800;
-        color: #ffffff;
-        margin: 6px 0 2px 0;
-    }
-    .kpi-delta {
-        font-size: 0.75rem;
-        font-weight: 600;
-        color: #34d399;
+    .catalog-row:hover {
+        background: rgba(22, 32, 53, 0.8);
+        border-color: rgba(99, 102, 241, 0.4);
     }
 
-    /* Clean Streamlit chat message background */
+    /* Waterfall Bar Container */
+    .waterfall-card {
+        background: rgba(15, 23, 42, 0.85);
+        border: 1px solid var(--border-subtle);
+        border-radius: 14px;
+        padding: 22px;
+        margin-bottom: 24px;
+    }
+
+    /* Streamlit Chat Messages cleanups */
     [data-testid="stChatMessage"] {
         background-color: transparent !important;
         border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        padding-top: 14px;
-        padding-bottom: 14px;
+        padding-top: 16px;
+        padding-bottom: 16px;
     }
 
-    /* Hide default Streamlit headers & footers for native app look */
+    /* Hide Streamlit default menus & footers */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
@@ -353,11 +362,11 @@ st.markdown("""
 
 # ── API Client Layer ─────────────────────────────────────────────────────────
 
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=6)
 def check_system_health() -> dict:
-    """Query FastAPI health endpoint."""
+    """Fetch health and active engine metrics."""
     try:
-        resp = httpx.get(f"{API_BASE_URL}/api/v1/health", timeout=6.0)
+        resp = httpx.get(f"{API_BASE_URL}/api/v1/health", timeout=5.0)
         if resp.status_code == 200:
             return resp.json()
         return {"status": "degraded", "error": f"HTTP {resp.status_code}"}
@@ -365,11 +374,11 @@ def check_system_health() -> dict:
         return {"status": "unhealthy", "error": str(e)}
 
 
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=6)
 def fetch_indexed_documents() -> list[dict]:
-    """Retrieve catalog of all indexed documents."""
+    """Retrieve indexed document list."""
     try:
-        resp = httpx.get(f"{API_BASE_URL}/api/v1/documents", timeout=8.0)
+        resp = httpx.get(f"{API_BASE_URL}/api/v1/documents", timeout=6.0)
         if resp.status_code == 200:
             return resp.json().get("documents", [])
         return []
@@ -378,7 +387,7 @@ def fetch_indexed_documents() -> list[dict]:
 
 
 def upload_pdf_file(file) -> dict:
-    """Upload a PDF file to the backend for ingestion."""
+    """Upload PDF file to backend for ingestion and embedding."""
     try:
         files = {"file": (file.name, file.getvalue(), "application/pdf")}
         resp = httpx.post(f"{API_BASE_URL}/api/v1/upload", files=files, timeout=300.0)
@@ -409,7 +418,7 @@ def execute_pipeline_query_stream(question: str, source_file: str | None = None)
         ) as response:
             if response.status_code != 200:
                 err_text = response.read().decode("utf-8")
-                yield {"event": "error", "message": f"Server returned {response.status_code}: {err_text}"}
+                yield {"event": "error", "message": f"Server error ({response.status_code}): {err_text}"}
                 return
 
             for line in response.iter_lines():
@@ -428,7 +437,7 @@ def execute_pipeline_query_stream(question: str, source_file: str | None = None)
 
 
 def clear_all_documents() -> bool:
-    """Purge entire knowledge base from Qdrant, BM25, and disk."""
+    """Purge entire knowledge base."""
     try:
         resp = httpx.delete(f"{API_BASE_URL}/api/v1/documents", timeout=15.0)
         if resp.status_code == 200:
@@ -440,7 +449,7 @@ def clear_all_documents() -> bool:
 
 
 def delete_document_by_name(filename: str) -> bool:
-    """Delete single document by filename."""
+    """Delete single document."""
     try:
         encoded = urllib.parse.quote(filename)
         resp = httpx.delete(f"{API_BASE_URL}/api/v1/documents/{encoded}", timeout=15.0)
@@ -452,7 +461,7 @@ def delete_document_by_name(filename: str) -> bool:
         return False
 
 
-# ── Session State Management ────────────────────────────────────────────────
+# ── Session State Initialization ─────────────────────────────────────────────
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
@@ -464,33 +473,39 @@ if "telemetry_history" not in st.session_state:
     st.session_state.telemetry_history = []
 
 
-# ── Top Executive Header ────────────────────────────────────────────────────
+# ── Top Navigation Bar ───────────────────────────────────────────────────────
 
 health = check_system_health()
 is_healthy = health.get("status") == "healthy"
 provider_raw = health.get("provider", "ollama")
-provider_label = "Local Ollama (RTX 3050 GPU)" if provider_raw == "ollama" else "Google Gemini Cloud"
+provider_name = "Ollama Llama 3.2:3b (RTX 3050 GPU)" if provider_raw == "ollama" else "Google Gemini 1.5 Flash"
 docs_indexed_count = health.get("documents_indexed", 0)
 
-status_pill_class = "status-pill status-pill-online" if is_healthy else "status-pill status-pill-offline"
-status_text = "ENGINE ONLINE" if is_healthy else "OFFLINE / STARTING"
+status_chip_class = "telemetry-chip telemetry-chip-live" if is_healthy else "telemetry-chip telemetry-chip-offline"
+status_chip_text = "CONNECTED" if is_healthy else "DISCONNECTED"
 
 st.markdown(
     f"""
-    <div class="documind-header">
-        <div class="brand-title-box">
-            <h1>⚡ DocuMind <span style="font-size: 1.15rem; font-weight: 500; opacity: 0.65; letter-spacing: 0;">Enterprise</span></h1>
-            <div class="brand-subtitle">Agentic Multimodal PDF Intelligence & Two-Stage Precision RAG Engine</div>
+    <div class="app-navbar">
+        <div class="brand-cluster">
+            <div class="brand-icon">⚡</div>
+            <div>
+                <div style="display: flex; align-items: center;">
+                    <h1 class="brand-title-text">DocuMind</h1>
+                    <span class="brand-edition-tag">ENTERPRISE RAG</span>
+                </div>
+                <div class="brand-motto">Two-Stage Precision RAG Engine with Cross-Encoder Verification</div>
+            </div>
         </div>
-        <div class="header-pills-row">
-            <div class="{status_pill_class}">
-                <div class="pulse-beacon"></div>
-                <span>{status_text}</span>
+        <div class="nav-telemetry-cluster">
+            <div class="{status_chip_class}">
+                <div class="pulse-dot-green"></div>
+                <span>{status_chip_text}</span>
             </div>
-            <div class="status-pill">
-                <span>🧠 {provider_label}</span>
+            <div class="telemetry-chip">
+                <span>🧠 {provider_name}</span>
             </div>
-            <div class="status-pill">
+            <div class="telemetry-chip">
                 <span>📑 {docs_indexed_count} Chunks Indexed</span>
             </div>
         </div>
@@ -500,25 +515,23 @@ st.markdown(
 )
 
 
-# ── Sidebar Control Rail ─────────────────────────────────────────────────────
+# ── Sidebar Workspace Rail ───────────────────────────────────────────────────
 
 with st.sidebar:
-    st.markdown('<div class="sidebar-section-title">🎯 Retrieval Scope</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-heading">🎯 Retrieval Scope</div>', unsafe_allow_html=True)
 
     indexed_docs = fetch_indexed_documents()
     doc_names = [d["filename"] for d in indexed_docs]
-    scope_options = ["🔍 All Documents (Global Search)"] + [f"📄 {name}" for name in doc_names]
+    scope_options = ["🔍 Global Search (All Documents)"] + [f"📄 {name}" for name in doc_names]
 
-    # Handle indexing selection
     curr_index = 0
     if st.session_state.selected_document and st.session_state.selected_document in doc_names:
         curr_index = doc_names.index(st.session_state.selected_document) + 1
 
     selected_scope = st.selectbox(
-        "Corpus Scope",
+        "Scope Selector",
         options=scope_options,
         index=curr_index,
-        help="Confine dense/sparse retrieval to a specific document or query all uploaded files.",
         label_visibility="collapsed",
     )
 
@@ -528,22 +541,22 @@ with st.sidebar:
         st.session_state.selected_document = None
 
     if st.session_state.selected_document:
-        st.caption(f"Currently scoped to: **{st.session_state.selected_document}**")
-        if st.button("🌐 Reset to Global Search", use_container_width=True):
+        st.caption(f"Currently focused on: **{st.session_state.selected_document}**")
+        if st.button("🌐 Switch to Global Search", use_container_width=True):
             st.session_state.selected_document = None
             st.rerun()
 
-    st.markdown('<div class="sidebar-section-title">📤 Ingestion Dropzone</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-heading">📤 Document Ingestion</div>', unsafe_allow_html=True)
     uploaded_pdf = st.file_uploader(
         "Upload Enterprise PDF",
         type=["pdf"],
-        help="Upload PDF for automatic layout analysis, OCR extraction, and structure-aware chunking.",
+        help="Automated layout parsing, OCR extraction & section chunking.",
         label_visibility="collapsed",
     )
 
     if uploaded_pdf:
         if st.button("⚡ Ingest & Index Document", use_container_width=True, type="primary"):
-            with st.spinner(f"Ingesting '{uploaded_pdf.name}'..."):
+            with st.spinner(f"Processing '{uploaded_pdf.name}'..."):
                 res = upload_pdf_file(uploaded_pdf)
                 if res.get("error"):
                     st.error(f"Ingestion failed: {res['error']}")
@@ -555,42 +568,33 @@ with st.sidebar:
                     time.sleep(1)
                     st.rerun()
 
-    # Document Inventory in Sidebar
     if indexed_docs:
-        st.markdown('<div class="sidebar-section-title">📑 Indexed Corpora</div>', unsafe_allow_html=True)
-        for doc in indexed_docs:
-            st.markdown(
-                f"""
-                <div class="doc-tree-item">
-                    <span style="font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 175px;" title="{html.escape(doc['filename'])}">
-                        📄 {html.escape(doc['filename'])}
-                    </span>
-                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: #94a3b8;">
-                        {doc['chunk_count']} chunks
-                    </span>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+        st.markdown('<div class="sidebar-heading">📑 Active Corpora</div>', unsafe_allow_html=True)
+        for d in indexed_docs:
+            c1, c2 = st.columns([4, 2])
+            with c1:
+                st.caption(f"📄 {d['filename']}")
+            with c2:
+                st.caption(f"`{d['chunk_count']} chunks`")
 
-        if st.button("🗑️ Purge Knowledge Base", use_container_width=True):
+        if st.button("🗑️ Purge All Documents", use_container_width=True):
             if clear_all_documents():
                 st.session_state.selected_document = None
                 st.session_state.chat_history = []
-                st.success("Knowledge base purged successfully.")
-                time.sleep(0.6)
+                st.success("All indexed documents purged.")
+                time.sleep(0.5)
                 st.rerun()
             else:
-                st.error("Failed to purge knowledge base.")
+                st.error("Failed to purge documents.")
 
-    st.markdown('<div class="sidebar-section-title">🖥️ Hardware Budget</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-heading">🖥️ Hardware Budget</div>', unsafe_allow_html=True)
     st.caption("⚡ **GPU**: NVIDIA RTX 3050 Laptop (4GB VRAM)")
-    st.caption("🧠 **LLM**: Ollama llama3.2:3b (GPU VRAM ~2GB)")
+    st.caption("🧠 **LLM**: Ollama llama3.2:3b (Pinned in GPU VRAM)")
     st.caption("⚖️ **Reranker**: BGE-Reranker-Base (CPU offload)")
     st.caption("📐 **Embeddings**: Nomic-Embed-Text (768-dim)")
 
 
-# ── Multi-Tab Executive Hub ──────────────────────────────────────────────────
+# ── Tab Navigation ───────────────────────────────────────────────────────────
 
 tab_chat, tab_catalog, tab_observability, tab_architecture = st.tabs([
     "💬 Intelligence Workspace",
@@ -605,55 +609,63 @@ tab_chat, tab_catalog, tab_observability, tab_architecture = st.tabs([
 # ══════════════════════════════════════════════════════════════════════════════
 
 with tab_chat:
-    # Starter Query Chips
-    st.caption("💡 Quick-exploration inquiries:")
-    starter_prompts = [
-        "What are the primary research questions investigated in this paper?",
-        "What empirical research findings and hypotheses are confirmed in the results?",
-        "Explain Proposition P6 on Servant Leadership and how empowerment converts into performance.",
-        "Summarize the practical implications and research gaps identified by the authors.",
-    ]
+    # If chat is empty, show modern Hero Welcome Card with categorized starter queries
+    if not st.session_state.chat_history:
+        st.markdown(
+            """
+            <div class="empty-hero-container">
+                <div class="empty-hero-title">Verify Any Claim Across Your PDF Corpus</div>
+                <div class="empty-hero-desc">
+                    Ask complex analytical questions, extract tabular data, and receive verified answers backed by
+                    strict page-level citations and small-to-big context inspection.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-    col_q1, col_q2 = st.columns(2)
-    with col_q1:
-        if st.button(f"📌 {starter_prompts[0]}", use_container_width=True):
-            st.session_state.pending_query = starter_prompts[0]
-            st.rerun()
-        if st.button(f"📌 {starter_prompts[1]}", use_container_width=True):
-            st.session_state.pending_query = starter_prompts[1]
-            st.rerun()
-    with col_q2:
-        if st.button(f"📌 {starter_prompts[2]}", use_container_width=True):
-            st.session_state.pending_query = starter_prompts[2]
-            st.rerun()
-        if st.button(f"📌 {starter_prompts[3]}", use_container_width=True):
-            st.session_state.pending_query = starter_prompts[3]
-            st.rerun()
+        st.caption("✨ Recommended starter queries:")
+        col_p1, col_p2 = st.columns(2)
+        starter_queries = [
+            ("🔬 EMPIRICAL INQUIRY", "What are the primary research questions investigated in this paper?"),
+            ("📊 DATA & RESULTS", "What empirical research findings and hypotheses are confirmed in the results?"),
+            ("📑 THEORETICAL FRAMEWORK", "Explain Proposition P6 on Servant Leadership and how empowerment converts into performance."),
+            ("🛡️ GAPS & LIMITATIONS", "Summarize the practical implications and research gaps identified by the authors."),
+        ]
 
-    # Scope and Reset Controls
-    col_scope_info, col_reset_btn = st.columns([5, 1])
-    with col_scope_info:
+        with col_p1:
+            for cat, q in starter_queries[:2]:
+                if st.button(f"{cat}\n\n**{q}**", key=f"starter_{cat}", use_container_width=True):
+                    st.session_state.pending_query = q
+                    st.rerun()
+        with col_p2:
+            for cat, q in starter_queries[2:]:
+                if st.button(f"{cat}\n\n**{q}**", key=f"starter_{cat}", use_container_width=True):
+                    st.session_state.pending_query = q
+                    st.rerun()
+
+    # Scope Bar & Reset Action
+    col_scope_tag, col_reset_chat = st.columns([5, 1])
+    with col_scope_tag:
         if st.session_state.selected_document:
             st.markdown(
-                f'<div style="font-size: 0.82rem; color: #818cf8; padding-top: 8px;">'
-                f'🎯 <b>Scoped Query:</b> Searching within <code>{html.escape(st.session_state.selected_document)}</code>'
+                f'<div style="font-size: 0.82rem; color: #818cf8; padding: 6px 0;">'
+                f'🎯 <b>Scoped Search:</b> Restricting retrieval to <code>{html.escape(st.session_state.selected_document)}</code>'
                 f'</div>',
                 unsafe_allow_html=True,
             )
         else:
             st.markdown(
-                '<div style="font-size: 0.82rem; color: #94a3b8; padding-top: 8px;">'
-                '🌐 <b>Global Search:</b> Searching across all ingested PDF corpora'
+                '<div style="font-size: 0.82rem; color: #94a3b8; padding: 6px 0;">'
+                '🌐 <b>Global Search:</b> Cross-referencing across all indexed enterprise PDF documents'
                 '</div>',
                 unsafe_allow_html=True,
             )
-    with col_reset_btn:
+    with col_reset_chat:
         if st.session_state.chat_history:
             if st.button("🗑️ Reset Chat", use_container_width=True):
                 st.session_state.chat_history = []
                 st.rerun()
-
-    st.markdown("---")
 
     # Render Historical Messages
     for msg in st.session_state.chat_history:
@@ -662,10 +674,10 @@ with tab_chat:
                 st.markdown(f"**{msg['content']}**")
         else:
             with st.chat_message("assistant", avatar="⚡"):
-                # Render answer directly with native markdown
+                # Render answer natively
                 st.markdown(msg["content"])
 
-                # Verified Citations Drawer
+                # Citations
                 citations = msg.get("citations", [])
                 if citations:
                     with st.expander(f"📎 Verified Citations & Grounded Evidence ({len(citations)} chunks)", expanded=False):
@@ -681,16 +693,14 @@ with tab_chat:
                             st.markdown(
                                 f"""
                                 <div class="citation-card">
-                                    <div class="citation-header">
+                                    <div class="citation-header-row">
                                         <div>
-                                            <span class="page-chip">Page {p_num}</span>
+                                            <span class="page-badge">Page {p_num}</span>
                                             {heading_badge}
                                         </div>
-                                        <span class="source-chip">📄 {s_file}</span>
+                                        <span class="source-badge">📄 {s_file}</span>
                                     </div>
-                                    <div class="citation-body">
-                                        {snippet_text}
-                                    </div>
+                                    <div class="citation-snippet-text">{snippet_text}</div>
                                 </div>
                                 """,
                                 unsafe_allow_html=True,
@@ -713,43 +723,40 @@ with tab_chat:
 
                 st.markdown(
                     f"""
-                    <div class="telemetry-row">
-                        <div class="telemetry-node">
+                    <div class="telemetry-strip">
+                        <div class="telemetry-item">
                             <span>🛡️ Grounding Confidence:</span>
-                            <span class="telemetry-val" style="color: {conf_color};">{conf_pct}%</span>
+                            <span class="telemetry-number" style="color: {conf_color};">{conf_pct}%</span>
                         </div>
-                        <div class="telemetry-node">
+                        <div class="telemetry-item">
                             <span>⏱️ Latency:</span>
-                            <span class="telemetry-val">{latency_s:.2f}s</span>
+                            <span class="telemetry-number">{latency_s:.2f}s</span>
                         </div>
-                        <div class="telemetry-node">
+                        <div class="telemetry-item">
                             <span>🎯 Modality:</span>
-                            <span class="telemetry-val">{qtype.title()}</span>
+                            <span class="telemetry-number">{qtype.title()}</span>
                         </div>
-                        <div class="telemetry-node">
+                        <div class="telemetry-item">
                             <span>⚙️ Model:</span>
-                            <span class="telemetry-val" style="color: #a5b4fc;">{model_used}</span>
+                            <span class="telemetry-number" style="color: #a5b4fc;">{model_used}</span>
                         </div>
                     </div>
                     """,
                     unsafe_allow_html=True,
                 )
 
-    # User Input
+    # Active Query Input
     active_prompt = st.chat_input("Ask any question across your ingested enterprise PDFs...")
 
     if st.session_state.pending_query:
         active_prompt = st.session_state.pending_query
         st.session_state.pending_query = None
 
-    # Handle Active Query Execution
     if active_prompt:
-        # Display user message immediately
         st.session_state.chat_history.append({"role": "user", "content": active_prompt})
         with st.chat_message("user", avatar="👤"):
             st.markdown(f"**{active_prompt}**")
 
-        # Stream assistant response
         with st.chat_message("assistant", avatar="⚡"):
             status_box = st.status("⚡ Initializing pipeline...", expanded=True)
             text_placeholder = st.empty()
@@ -763,7 +770,7 @@ with tab_chat:
                     if ev_type == "stage":
                         stg = event.get("stage")
                         if stg == "classifying":
-                            status_box.update(label="🔍 1/3 Query Analysis & Expansion...", state="running")
+                            status_box.update(label="🔍 1/3 Query Analysis & Router...", state="running")
                         elif stg == "retrieving":
                             status_box.update(label="📚 2/3 Parallel Hybrid Search (Dense Qdrant + BM25 Lexical)...", state="running")
                         elif stg == "reranking":
@@ -801,7 +808,6 @@ with tab_chat:
                     if not raw_answer:
                         raw_answer = "I don't have enough grounded information in the ingested documents to answer this question."
 
-                    # Render final answer natively
                     text_placeholder.markdown(raw_answer)
 
                     citations = final_data.get("citations", [])
@@ -812,7 +818,6 @@ with tab_chat:
                     if abstained:
                         st.warning("⚠️ Insufficient grounded context: pipeline strictly abstained from hallucinating.")
 
-                    # Citations Drawer
                     if citations:
                         with st.expander(f"📎 Verified Citations & Grounded Evidence ({len(citations)} chunks)", expanded=False):
                             for cite in citations:
@@ -827,16 +832,14 @@ with tab_chat:
                                 st.markdown(
                                     f"""
                                     <div class="citation-card">
-                                        <div class="citation-header">
+                                        <div class="citation-header-row">
                                             <div>
-                                                <span class="page-chip">Page {p_num}</span>
+                                                <span class="page-badge">Page {p_num}</span>
                                                 {heading_badge}
                                             </div>
-                                            <span class="source-chip">📄 {s_file}</span>
+                                            <span class="source-badge">📄 {s_file}</span>
                                         </div>
-                                        <div class="citation-body">
-                                            {snippet_text}
-                                        </div>
+                                        <div class="citation-snippet-text">{snippet_text}</div>
                                     </div>
                                     """,
                                     unsafe_allow_html=True,
@@ -849,36 +852,34 @@ with tab_chat:
                                             unsafe_allow_html=True,
                                         )
 
-                    # Telemetry Strip
                     conf_pct = int(conf * 100)
                     conf_color = "#34d399" if conf >= 0.8 else ("#fbbf24" if conf >= 0.5 else "#f87171")
                     model_used = "llama3.2:3b" if provider_raw == "ollama" else "gemini-flash"
 
                     st.markdown(
                         f"""
-                        <div class="telemetry-row">
-                            <div class="telemetry-node">
+                        <div class="telemetry-strip">
+                            <div class="telemetry-item">
                                 <span>🛡️ Grounding Confidence:</span>
-                                <span class="telemetry-val" style="color: {conf_color};">{conf_pct}%</span>
+                                <span class="telemetry-number" style="color: {conf_color};">{conf_pct}%</span>
                             </div>
-                            <div class="telemetry-node">
+                            <div class="telemetry-item">
                                 <span>⏱️ Latency:</span>
-                                <span class="telemetry-val">{elapsed:.2f}s</span>
+                                <span class="telemetry-number">{elapsed:.2f}s</span>
                             </div>
-                            <div class="telemetry-node">
+                            <div class="telemetry-item">
                                 <span>🎯 Modality:</span>
-                                <span class="telemetry-val">{qtype.title()}</span>
+                                <span class="telemetry-number">{qtype.title()}</span>
                             </div>
-                            <div class="telemetry-node">
+                            <div class="telemetry-item">
                                 <span>⚙️ Model:</span>
-                                <span class="telemetry-val" style="color: #a5b4fc;">{model_used}</span>
+                                <span class="telemetry-number" style="color: #a5b4fc;">{model_used}</span>
                             </div>
                         </div>
                         """,
                         unsafe_allow_html=True,
                     )
 
-                    # Append to session state
                     st.session_state.telemetry_history.append({
                         "timestamp": time.strftime("%H:%M:%S"),
                         "query": active_prompt,
@@ -992,8 +993,8 @@ with tab_observability:
         # CSS Waterfall bars
         st.markdown(
             f"""
-            <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 20px; margin-bottom: 24px;">
-                <div style="margin-bottom: 12px;">
+            <div class="waterfall-card">
+                <div style="margin-bottom: 14px;">
                     <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px;">
                         <span>1. Query Routing & Transformation</span>
                         <span style="font-family: monospace; color: #38bdf8;">{classify_s * 1000:.0f} ms ({classify_s:.2f}s)</span>
@@ -1003,7 +1004,7 @@ with tab_observability:
                     </div>
                 </div>
 
-                <div style="margin-bottom: 12px;">
+                <div style="margin-bottom: 14px;">
                     <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px;">
                         <span>2. Parallel Hybrid Retrieval (Qdrant Dense + BM25 Lexical)</span>
                         <span style="font-family: monospace; color: #818cf8;">{retrieve_s * 1000:.0f} ms ({retrieve_s:.2f}s)</span>
@@ -1013,7 +1014,7 @@ with tab_observability:
                     </div>
                 </div>
 
-                <div style="margin-bottom: 12px;">
+                <div style="margin-bottom: 14px;">
                     <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px;">
                         <span>3. Cross-Encoder BGE-Reranker (Top 20 → Top 5)</span>
                         <span style="font-family: monospace; color: #f59e0b;">{rerank_s * 1000:.0f} ms ({rerank_s:.2f}s)</span>
@@ -1023,7 +1024,7 @@ with tab_observability:
                     </div>
                 </div>
 
-                <div style="margin-bottom: 12px;">
+                <div style="margin-bottom: 14px;">
                     <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px;">
                         <span>4. Llama 3.2:3b Answer Synthesis (Token Streaming)</span>
                         <span style="font-family: monospace; color: #10b981;">{gen_s * 1000:.0f} ms ({gen_s:.2f}s)</span>

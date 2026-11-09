@@ -43,6 +43,7 @@ from documind.ingestion.embedder import Embedder, get_embedder
 from documind.ingestion.ocr import ocr_pdf_pages
 from documind.ingestion.parser import PDFParser
 from documind.orchestrator.graph import build_pipeline, run_query, run_query_stream
+from documind.retrieval.cache import SemanticCache
 from documind.retrieval.reranker import Reranker
 from documind.retrieval.sparse import BM25Index
 from documind.vectorstore.qdrant import QdrantStore
@@ -60,17 +61,21 @@ HASH_REGISTRY_PATH = Path("./storage/doc_hashes.json")
 # ── Singleton component cache ──
 _components: dict = {}
 
-# ── In-Memory Exact Match Query Cache (invalidated per corpus mutation) ──
-_query_cache: dict[tuple[str, str | None, int], dict] = {}
+# ── Dynamic Semantic Query Cache (vectorized similarity >= 0.92, document-scoped) ──
+semantic_cache = SemanticCache(similarity_threshold=0.92, max_entries=1000)
 _corpus_version: int = 1
 
 
-def _invalidate_cache():
-    """Invalidate query cache when documents are uploaded or deleted."""
+def _invalidate_cache(filename: str | None = None):
+    """Invalidate semantic query cache when documents are uploaded or deleted."""
     global _corpus_version
     _corpus_version += 1
-    _query_cache.clear()
-    logger.info(f"Query cache invalidated (corpus version: {_corpus_version})")
+    if filename:
+        removed = semantic_cache.invalidate_document(filename)
+        logger.info(f"Semantic cache invalidated for '{filename}': {removed} queries removed")
+    else:
+        semantic_cache.clear()
+        logger.info("Semantic cache fully cleared")
 
 
 # ── App definition ──
@@ -418,30 +423,41 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
 @app.post("/api/v1/query", response_model=QueryResponse)
 @app.post("/query", response_model=QueryResponse, include_in_schema=False)  # backwards compat
 async def query_documents(request: Request, body: QueryRequest):
-    """Ask a question about uploaded documents.
+    """Ask a question about uploaded documents with dual-tier semantic caching.
 
-    Runs the full LangGraph pipeline:
-    classify → retrieve → rerank → generate → verify (→ retry if needed)
+    Checks:
+    1. Exact query match in cache (0ms)
+    2. Dense vector cosine similarity match in cache (sim >= 0.92)
+    3. If miss: Runs full LangGraph pipeline & stores user query in semantic cache
     """
     request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
-    logger.info(f"[{request_id}] Query: {body.question!r}")
+    logger.info(f"[{request_id}] Query: {body.question!r} (scope: {body.source_file})")
     t0 = time.time()
 
-    cache_key = (body.question.strip().lower(), body.source_file, _corpus_version)
-    if cache_key in _query_cache:
-        cached = _query_cache[cache_key]
-        logger.info(f"[{request_id}] Serving query from exact match cache")
-        raw_c = cached.get("citations", [])
+    components = get_components()
+    embedder: Embedder = components["embedder"]
+
+    # 1. Tier 1: Exact match lookup (0ms)
+    cached_data, sim_score, match_type = semantic_cache.lookup(body.question, None, body.source_file)
+    query_emb = None
+    if cached_data is None:
+        # 2. Tier 2: Semantic vector match
+        query_emb = embedder.embed_text(body.question)
+        cached_data, sim_score, match_type = semantic_cache.lookup(body.question, query_emb, body.source_file)
+
+    if cached_data is not None:
+        logger.info(f"[{request_id}] Serving query from {match_type} semantic cache (score={sim_score:.2f})")
+        raw_c = cached_data.get("citations", [])
         return QueryResponse(
-            answer=cached["answer"],
+            answer=cached_data["answer"],
             citations=[Citation(**c) if isinstance(c, dict) else c for c in raw_c],
-            confidence=cached.get("confidence", 0.0),
-            abstained=cached.get("abstained", False),
-            query_type=cached.get("query_type", "text"),
-            retry_count=cached.get("retry_count", 0),
+            confidence=cached_data.get("confidence", 0.0),
+            abstained=cached_data.get("abstained", False),
+            query_type=cached_data.get("query_type", "text"),
+            retry_count=cached_data.get("retry_count", 0),
             request_id=request_id,
             latency_s=0.01,
-            stage_timings=cached.get("stage_timings", {}),
+            stage_timings={"semantic_cache_s": 0.005},
             cached=True,
             error=None,
         )
@@ -473,8 +489,11 @@ async def query_documents(request: Request, body: QueryRequest):
             except Exception as citation_err:
                 logger.warning(f"[{request_id}] Skipping malformed citation: {citation_err}")
 
-        # Store in cache
-        _query_cache[cache_key] = {
+        # Store user query into semantic cache (only real user queries fill the cache)
+        if query_emb is None:
+            query_emb = embedder.embed_text(body.question)
+
+        cache_payload = {
             "answer": result["answer"],
             "citations": raw_citations,
             "confidence": result["confidence"],
@@ -483,6 +502,7 @@ async def query_documents(request: Request, body: QueryRequest):
             "retry_count": result["retry_count"],
             "stage_timings": result.get("stage_timings", {}),
         }
+        semantic_cache.store(body.question, query_emb, body.source_file, cache_payload)
 
         return QueryResponse(
             answer=result["answer"],
@@ -506,19 +526,33 @@ async def query_documents(request: Request, body: QueryRequest):
 @app.post("/api/v1/query/stream")
 @app.post("/query/stream", include_in_schema=False)
 async def query_documents_stream(request: Request, body: QueryRequest):
-    """Stream answer generation token-by-token with real-time stage events via SSE."""
+    """Stream answer generation token-by-token with dual-tier semantic caching via SSE."""
     request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
-    logger.info(f"[{request_id}] Streaming query: {body.question!r}")
+    logger.info(f"[{request_id}] Streaming query: {body.question!r} (scope: {body.source_file})")
 
-    cache_key = (body.question.strip().lower(), body.source_file, _corpus_version)
-    if cache_key in _query_cache:
-        cached = _query_cache[cache_key]
-        logger.info(f"[{request_id}] Serving streaming query from exact match cache")
+    components = get_components()
+    embedder: Embedder = components["embedder"]
+
+    # 1. Tier 1: Exact string match (0ms)
+    cached_data, sim_score, match_type = semantic_cache.lookup(body.question, None, body.source_file)
+    query_emb = None
+    if cached_data is None:
+        # 2. Tier 2: Semantic vector match (cosine sim >= 0.92)
+        query_emb = embedder.embed_text(body.question)
+        cached_data, sim_score, match_type = semantic_cache.lookup(body.question, query_emb, body.source_file)
+
+    if cached_data is not None:
+        logger.info(f"[{request_id}] Serving streaming query from {match_type} semantic cache ({sim_score:.1%})")
 
         async def _cached_stream():
-            yield f"data: {json.dumps({'event': 'stage', 'stage': 'cached', 'message': 'Instant Cache Hit (0ms)'})}\n\n"
-            yield f"data: {json.dumps({'event': 'token', 'token': cached['answer']})}\n\n"
-            final_data = dict(cached)
+            msg = (
+                f"⚡ Semantic Cache Hit ({sim_score:.1%} match)"
+                if match_type == "semantic"
+                else "⚡ Exact Match Cache Hit (0ms)"
+            )
+            yield f"data: {json.dumps({'event': 'stage', 'stage': 'cached', 'message': msg})}\n\n"
+            yield f"data: {json.dumps({'event': 'token', 'token': cached_data['answer']})}\n\n"
+            final_data = dict(cached_data)
             final_data["cached"] = True
             final_data["latency_s"] = 0.01
             final_data["request_id"] = request_id
@@ -556,7 +590,11 @@ async def query_documents_stream(request: Request, body: QueryRequest):
             if item.get("event") == "final":
                 data = item.get("data", {})
                 data["request_id"] = request_id
-                _query_cache[cache_key] = data
+                # Store user query into semantic cache (only actual user queries fill the cache)
+                nonlocal query_emb
+                if query_emb is None:
+                    query_emb = embedder.embed_text(body.question)
+                semantic_cache.store(body.question, query_emb, body.source_file, data)
             yield f"data: {json.dumps(item)}\n\n"
 
     return StreamingResponse(
@@ -716,7 +754,8 @@ async def delete_document(filename: str):
             except Exception:
                 pass
 
-        _invalidate_cache()
+        # Invalidate semantic cache specifically for this deleted document
+        _invalidate_cache(filename=filename)
         return {"status": "success", "message": f"Document '{filename}' deleted successfully"}
     except Exception as e:
         logger.error(f"Failed to delete document '{filename}': {e}")

@@ -700,6 +700,7 @@ with tab_chat:
                 latency_s = msg.get("latency_s", 0.0)
                 qtype = msg.get("query_type", "Text")
                 model_used = "llama3.2:3b" if provider_raw == "ollama" else "gemini-flash"
+                cached_badge = '<span style="background: rgba(16, 185, 129, 0.2); color: #34d399; padding: 2px 7px; border-radius: 4px; font-weight: 600; font-family: monospace;">⚡ CACHED</span>' if msg.get("cached") else ""
 
                 st.markdown(
                     f"""
@@ -720,6 +721,7 @@ with tab_chat:
                             <span>⚙️ Model:</span>
                             <span class="telemetry-number" style="color: #a5b4fc;">{model_used}</span>
                         </div>
+                        {cached_badge}
                     </div>
                     """,
                     unsafe_allow_html=True,
@@ -758,7 +760,8 @@ with tab_chat:
                         elif stg == "generating":
                             status_box.update(label="⚡ Evidence verified — synthesizing grounded answer...", state="running", expanded=False)
                         elif stg == "cached":
-                            status_box.update(label="⚡ Exact-Match Semantic Cache Hit (0ms)", state="complete", expanded=False)
+                            cache_msg = event.get("message", "⚡ Semantic Cache Hit (0ms)")
+                            status_box.update(label=cache_msg, state="complete", expanded=False)
                     elif ev_type == "token":
                         tk = event.get("token", "")
                         accumulated_tokens.append(tk)
@@ -835,6 +838,7 @@ with tab_chat:
                     conf_pct = int(conf * 100)
                     conf_color = "#34d399" if conf >= 0.8 else ("#fbbf24" if conf >= 0.5 else "#f87171")
                     model_used = "llama3.2:3b" if provider_raw == "ollama" else "gemini-flash"
+                    cached_badge = '<span style="background: rgba(16, 185, 129, 0.2); color: #34d399; padding: 2px 7px; border-radius: 4px; font-weight: 600; font-family: monospace;">⚡ CACHED</span>' if final_data.get("cached") else ""
 
                     st.markdown(
                         f"""
@@ -855,6 +859,7 @@ with tab_chat:
                                 <span>⚙️ Model:</span>
                                 <span class="telemetry-number" style="color: #a5b4fc;">{model_used}</span>
                             </div>
+                            {cached_badge}
                         </div>
                         """,
                         unsafe_allow_html=True,

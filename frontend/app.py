@@ -609,7 +609,7 @@ tab_chat, tab_catalog, tab_observability, tab_architecture = st.tabs([
 # ══════════════════════════════════════════════════════════════════════════════
 
 with tab_chat:
-    # If chat is empty, show modern Hero Welcome Card with categorized starter queries
+    # If chat is empty, show clean Hero Welcome Card
     if not st.session_state.chat_history:
         st.markdown(
             """
@@ -623,26 +623,6 @@ with tab_chat:
             """,
             unsafe_allow_html=True,
         )
-
-        st.caption("✨ Recommended starter queries:")
-        col_p1, col_p2 = st.columns(2)
-        starter_queries = [
-            ("🔬 EMPIRICAL INQUIRY", "What are the primary research questions investigated in this paper?"),
-            ("📊 DATA & RESULTS", "What empirical research findings and hypotheses are confirmed in the results?"),
-            ("📑 THEORETICAL FRAMEWORK", "Explain Proposition P6 on Servant Leadership and how empowerment converts into performance."),
-            ("🛡️ GAPS & LIMITATIONS", "Summarize the practical implications and research gaps identified by the authors."),
-        ]
-
-        with col_p1:
-            for cat, q in starter_queries[:2]:
-                if st.button(f"{cat}\n\n**{q}**", key=f"starter_{cat}", use_container_width=True):
-                    st.session_state.pending_query = q
-                    st.rerun()
-        with col_p2:
-            for cat, q in starter_queries[2:]:
-                if st.button(f"{cat}\n\n**{q}**", key=f"starter_{cat}", use_container_width=True):
-                    st.session_state.pending_query = q
-                    st.rerun()
 
     # Scope Bar & Reset Action
     col_scope_tag, col_reset_chat = st.columns([5, 1])

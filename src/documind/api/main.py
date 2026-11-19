@@ -61,8 +61,8 @@ HASH_REGISTRY_PATH = Path("./storage/doc_hashes.json")
 # ── Singleton component cache ──
 _components: dict = {}
 
-# ── Dynamic Semantic Query Cache (vectorized similarity >= 0.92, document-scoped) ──
-semantic_cache = SemanticCache(similarity_threshold=0.92, max_entries=1000)
+# ── Dynamic Semantic Query Cache (vectorized similarity >= 0.85, document-scoped) ──
+semantic_cache = SemanticCache(similarity_threshold=0.85, max_entries=1000)
 _corpus_version: int = 1
 
 
@@ -537,7 +537,7 @@ async def query_documents_stream(request: Request, body: QueryRequest):
     cached_data, sim_score, match_type = semantic_cache.lookup(body.question, None, body.source_file)
     query_emb = None
     if cached_data is None:
-        # 2. Tier 2: Semantic vector match (cosine sim >= 0.92)
+        # 2. Tier 2: Semantic vector match (cosine sim >= 0.85)
         query_emb = embedder.embed_text(body.question)
         cached_data, sim_score, match_type = semantic_cache.lookup(body.question, query_emb, body.source_file)
 
@@ -546,16 +546,26 @@ async def query_documents_stream(request: Request, body: QueryRequest):
 
         async def _cached_stream():
             msg = (
-                f"⚡ Semantic Cache Hit ({sim_score:.1%} match)"
+                f"⚡ Semantic Cache Hit ({sim_score:.1%} match) — Zero LLM Tokens"
                 if match_type == "semantic"
-                else "⚡ Exact Match Cache Hit (0ms)"
+                else "⚡ Exact Match Cache Hit (0ms) — Zero LLM Tokens"
             )
-            yield f"data: {json.dumps({'event': 'stage', 'stage': 'cached', 'message': msg})}\n\n"
-            yield f"data: {json.dumps({'event': 'token', 'token': cached_data['answer']})}\n\n"
+            yield f"data: {json.dumps({'event': 'stage', 'stage': 'cached', 'message': msg, 'sim_score': sim_score, 'match_type': match_type})}\n\n"
+
+            # Fluid typewriter streaming for cached answers (zero LLM latency)
+            full_ans = str(cached_data.get("answer", ""))
+            words = full_ans.split(" ")
+            for i, word in enumerate(words):
+                chunk = word if i == len(words) - 1 else word + " "
+                yield f"data: {json.dumps({'event': 'token', 'token': chunk})}\n\n"
+                await asyncio.sleep(0.008)
+
             final_data = dict(cached_data)
             final_data["cached"] = True
-            final_data["latency_s"] = 0.01
+            final_data["latency_s"] = 0.02
             final_data["request_id"] = request_id
+            final_data["sim_score"] = sim_score
+            final_data["match_type"] = match_type
             yield f"data: {json.dumps({'event': 'final', 'data': final_data})}\n\n"
 
         return StreamingResponse(

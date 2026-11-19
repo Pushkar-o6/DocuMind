@@ -39,13 +39,13 @@ class SemanticCache:
     Matches queries with cosine similarity >= similarity_threshold (default 0.93).
     """
 
-    def __init__(self, similarity_threshold: float = 0.93, max_entries: int = 500):
+    def __init__(self, similarity_threshold: float = 0.85, max_entries: int = 1000):
         self.similarity_threshold = similarity_threshold
         self.max_entries = max_entries
         self._entries: list[SemanticCacheEntry] = []
         self._lock = threading.Lock()
         logger.info(
-            f"SemanticCache initialized (similarity_threshold={similarity_threshold}, max_entries={max_entries})"
+            f"SemanticCache initialized (similarity_threshold={similarity_threshold:.2f}, max_entries={max_entries})"
         )
 
     @staticmethod
@@ -75,15 +75,24 @@ class SemanticCache:
             match_type is 'exact', 'semantic', or 'miss'.
         """
         clean_q = question.strip().lower()
+        clean_scope = source_file.strip() if source_file else None
         now = time.time()
 
         with self._lock:
             # ── Tier 1: Exact String Match (0ms) ──
             for entry in self._entries:
-                if entry.source_file == source_file and entry.question.strip().lower() == clean_q:
+                entry_scope = entry.source_file.strip() if entry.source_file else None
+                scope_match = (
+                    (clean_scope is None)
+                    or (entry_scope is None)
+                    or (entry_scope == clean_scope)
+                )
+                if scope_match and entry.question.strip().lower() == clean_q:
                     entry.hit_count += 1
                     entry.last_accessed = now
-                    logger.info(f"SemanticCache exact match hit (100%) for: '{question}'")
+                    logger.info(
+                        f"⚡ [CACHE HIT - EXACT] 100% string match for '{question}' (scope: {clean_scope})"
+                    )
                     return dict(entry.response_data), 1.0, "exact"
 
             # ── Tier 2: Semantic Vector Match (Cosine Similarity) ──
@@ -95,8 +104,9 @@ class SemanticCache:
             best_sim = -1.0
 
             for entry in self._entries:
-                # Must match document scope (or both be global)
-                if entry.source_file != source_file:
+                entry_scope = entry.source_file.strip() if entry.source_file else None
+                # If specific scope requested and entry has different specific scope, skip
+                if clean_scope and entry_scope and clean_scope != entry_scope:
                     continue
 
                 # Cosine similarity between two unit vectors is simply their dot product
@@ -109,11 +119,15 @@ class SemanticCache:
                 best_entry.hit_count += 1
                 best_entry.last_accessed = now
                 logger.info(
-                    f"SemanticCache hit ({best_sim:.1%}) for '{question}' "
-                    f"-> matched '{best_entry.question}'"
+                    f"⚡ [CACHE HIT - SEMANTIC] {best_sim:.1%} similarity (>= {self.similarity_threshold:.0%}) "
+                    f"for '{question}' -> matched cached question '{best_entry.question}'"
                 )
                 return dict(best_entry.response_data), best_sim, "semantic"
 
+            if best_sim > 0.0:
+                logger.info(
+                    f"ℹ️ [CACHE MISS] Best similarity was {best_sim:.1%} (< {self.similarity_threshold:.0%}) for '{question}'"
+                )
             return None, max(0.0, best_sim), "miss"
 
     def store(
@@ -141,11 +155,13 @@ class SemanticCache:
         norm_emb = self._normalize(query_embedding)
         now = time.time()
         clean_q = question.strip()
+        clean_scope = source_file.strip() if source_file else None
 
         with self._lock:
             # Check if this exact query & scope already exists; update it if so
             for entry in self._entries:
-                if entry.source_file == source_file and entry.question.strip().lower() == clean_q.lower():
+                entry_scope = entry.source_file.strip() if entry.source_file else None
+                if entry_scope == clean_scope and entry.question.strip().lower() == clean_q.lower():
                     entry.response_data = dict(response_data)
                     entry.last_accessed = now
                     entry.embedding = norm_emb
@@ -161,14 +177,14 @@ class SemanticCache:
             new_entry = SemanticCacheEntry(
                 question=clean_q,
                 embedding=norm_emb,
-                source_file=source_file,
+                source_file=clean_scope,
                 response_data=dict(response_data),
                 created_at=now,
                 last_accessed=now,
             )
             self._entries.append(new_entry)
             logger.info(
-                f"SemanticCache stored entry (scope={source_file!r}, "
+                f"SemanticCache stored entry (scope={clean_scope!r}, "
                 f"total_cached={len(self._entries)}): '{clean_q}'"
             )
             return True
@@ -224,3 +240,4 @@ class SemanticCache:
         """Return the current number of cached user queries."""
         with self._lock:
             return len(self._entries)
+

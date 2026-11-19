@@ -59,3 +59,26 @@ build/
 *.log
 logs/
 .system_generated/
+
+# Personal launcher scripts
+run.bat
+run.ps1
+
+# Personal documents & reports
+DocuMind_Project_Report.docx
+DocuMind_CSE472_NLP_Report*.docx
+DocuMind_Enterprise*.pptx
+*.docx
+*.pptx
+
+# Test & lint caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Model / HuggingFace cache
+.cache/
+models/

@@ -225,7 +225,41 @@ st.markdown("""
         text-transform: uppercase;
         letter-spacing: 0.09em;
         color: #818cf8;
-        margin: 20px 0 8px 0;
+        margin: 18px 0 8px 0;
+    }
+
+    /* Sidebar Document Cards */
+    .sidebar-doc-card {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 10px;
+        margin-bottom: 6px;
+        background: rgba(15, 23, 42, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        gap: 8px;
+    }
+    .sidebar-doc-title {
+        font-size: 0.78rem;
+        color: #cbd5e1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1;
+        min-width: 0;
+    }
+    .sidebar-doc-badge {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.65rem;
+        font-weight: 600;
+        color: #818cf8;
+        background: rgba(99, 102, 241, 0.15);
+        border: 1px solid rgba(99, 102, 241, 0.3);
+        padding: 2px 6px;
+        border-radius: 4px;
+        white-space: nowrap;
+        flex-shrink: 0;
     }
 
     /* Empty State Hero Welcome Box */
@@ -362,9 +396,9 @@ st.markdown("""
 
 # ── API Client Layer ─────────────────────────────────────────────────────────
 
-@st.cache_data(ttl=6)
+@st.cache_data(ttl=60)
 def check_system_health() -> dict:
-    """Fetch health and active engine metrics."""
+    """Fetch health and active engine metrics (cached 60s to prevent spamming backend)."""
     try:
         resp = httpx.get(f"{API_BASE_URL}/api/v1/health", timeout=5.0)
         if resp.status_code == 200:
@@ -374,9 +408,9 @@ def check_system_health() -> dict:
         return {"status": "unhealthy", "error": str(e)}
 
 
-@st.cache_data(ttl=6)
+@st.cache_data(ttl=60)
 def fetch_indexed_documents() -> list[dict]:
-    """Retrieve indexed document list."""
+    """Retrieve indexed document list (cached 60s, invalidated on upload/delete)."""
     try:
         resp = httpx.get(f"{API_BASE_URL}/api/v1/documents", timeout=6.0)
         if resp.status_code == 200:
@@ -471,6 +505,8 @@ if "pending_query" not in st.session_state:
     st.session_state.pending_query = None
 if "telemetry_history" not in st.session_state:
     st.session_state.telemetry_history = []
+if "uploader_key" not in st.session_state:
+    st.session_state.uploader_key = 0
 
 
 # ── Top Navigation Bar ───────────────────────────────────────────────────────
@@ -508,6 +544,9 @@ st.markdown(
             <div class="telemetry-chip">
                 <span>📑 {docs_indexed_count} Chunks Indexed</span>
             </div>
+            <div class="telemetry-chip" style="color: #34d399; border-color: rgba(16, 185, 129, 0.35);">
+                <span>⚡ Semantic Cache Active</span>
+            </div>
         </div>
     </div>
     """,
@@ -518,7 +557,13 @@ st.markdown(
 # ── Sidebar Workspace Rail ───────────────────────────────────────────────────
 
 with st.sidebar:
-    st.markdown('<div class="sidebar-heading">🎯 Retrieval Scope</div>', unsafe_allow_html=True)
+    c_scope_hdr, c_scope_ref = st.columns([5, 1])
+    with c_scope_hdr:
+        st.markdown('<div class="sidebar-heading" style="margin-top: 6px;">🎯 Retrieval Scope</div>', unsafe_allow_html=True)
+    with c_scope_ref:
+        if st.button("🔄", help="Refresh health status and document list", key="refresh_all_btn"):
+            st.cache_data.clear()
+            st.rerun()
 
     indexed_docs = fetch_indexed_documents()
     doc_names = [d["filename"] for d in indexed_docs]
@@ -552,6 +597,7 @@ with st.sidebar:
         type=["pdf"],
         help="Automated layout parsing, OCR extraction & section chunking.",
         label_visibility="collapsed",
+        key=f"pdf_uploader_{st.session_state.uploader_key}",
     )
 
     if uploaded_pdf:
@@ -565,22 +611,29 @@ with st.sidebar:
                         st.info(f"ℹ️ {res.get('message')}")
                     else:
                         st.success(f"✅ Ingested **{res.get('filename')}** ({res.get('total_chunks')} chunks across {res.get('total_pages')} pages)")
+                    # Reset the file uploader widget state by incrementing key
+                    st.session_state.uploader_key += 1
+                    st.cache_data.clear()
                     time.sleep(1)
                     st.rerun()
 
     if indexed_docs:
         st.markdown('<div class="sidebar-heading">📑 Active Corpora</div>', unsafe_allow_html=True)
-        for d in indexed_docs:
-            c1, c2 = st.columns([4, 2])
-            with c1:
-                st.caption(f"📄 {d['filename']}")
-            with c2:
-                st.caption(f"`{d['chunk_count']} chunks`")
+        doc_cards_html = "".join([
+            f'<div class="sidebar-doc-card">'
+            f'  <div class="sidebar-doc-title" title="{html.escape(d["filename"])}">📄 {html.escape(d["filename"])}</div>'
+            f'  <div class="sidebar-doc-badge">{d["chunk_count"]} chunks</div>'
+            f'</div>'
+            for d in indexed_docs
+        ])
+        st.markdown(doc_cards_html, unsafe_allow_html=True)
 
         if st.button("🗑️ Purge All Documents", use_container_width=True):
             if clear_all_documents():
                 st.session_state.selected_document = None
                 st.session_state.chat_history = []
+                st.session_state.uploader_key += 1
+                st.cache_data.clear()
                 st.success("All indexed documents purged.")
                 time.sleep(0.5)
                 st.rerun()
@@ -699,8 +752,18 @@ with tab_chat:
                 conf_color = "#34d399" if conf >= 0.8 else ("#fbbf24" if conf >= 0.5 else "#f87171")
                 latency_s = msg.get("latency_s", 0.0)
                 qtype = msg.get("query_type", "Text")
-                model_used = "llama3.2:3b" if provider_raw == "ollama" else "gemini-flash"
-                cached_badge = '<span style="background: rgba(16, 185, 129, 0.2); color: #34d399; padding: 2px 7px; border-radius: 4px; font-weight: 600; font-family: monospace;">⚡ CACHED</span>' if msg.get("cached") else ""
+                is_msg_cached = bool(msg.get("cached"))
+                if is_msg_cached:
+                    model_used = "Semantic Cache (0 LLM Tokens)"
+                    cached_badge = (
+                        '<span style="background: rgba(16, 185, 129, 0.22); color: #34d399; '
+                        'border: 1px solid rgba(16, 185, 129, 0.45); padding: 3px 8px; '
+                        'border-radius: 6px; font-weight: 700; font-family: monospace; font-size: 0.72rem;">'
+                        '⚡ CACHE HIT (LLM Bypassed)</span>'
+                    )
+                else:
+                    model_used = "llama3.2:3b" if provider_raw == "ollama" else "gemini-flash"
+                    cached_badge = ""
 
                 st.markdown(
                     f"""
@@ -744,6 +807,8 @@ with tab_chat:
             text_placeholder = st.empty()
             accumulated_tokens = []
             final_data = {}
+            is_cache_hit = False
+            cache_hit_message = ""
             t0 = time.time()
 
             try:
@@ -751,7 +816,11 @@ with tab_chat:
                     ev_type = event.get("event")
                     if ev_type == "stage":
                         stg = event.get("stage")
-                        if stg == "classifying":
+                        if stg == "cached":
+                            is_cache_hit = True
+                            cache_hit_message = event.get("message", "⚡ Semantic Cache Hit (0ms) — Zero LLM Tokens")
+                            status_box.update(label=cache_hit_message, state="complete", expanded=False)
+                        elif stg == "classifying":
                             status_box.update(label="🔍 1/3 Query Analysis & Router...", state="running")
                         elif stg == "retrieving":
                             status_box.update(label="📚 2/3 Parallel Hybrid Search (Dense Qdrant + BM25 Lexical)...", state="running")
@@ -759,9 +828,6 @@ with tab_chat:
                             status_box.update(label="⚖️ 3/3 Cross-Encoder Precision Reranking (BGE-Reranker)...", state="running")
                         elif stg == "generating":
                             status_box.update(label="⚡ Evidence verified — synthesizing grounded answer...", state="running", expanded=False)
-                        elif stg == "cached":
-                            cache_msg = event.get("message", "⚡ Semantic Cache Hit (0ms)")
-                            status_box.update(label=cache_msg, state="complete", expanded=False)
                     elif ev_type == "token":
                         tk = event.get("token", "")
                         accumulated_tokens.append(tk)
@@ -772,7 +838,12 @@ with tab_chat:
                         final_data["error"] = event.get("message", "Pipeline execution error")
 
                 elapsed = round(time.time() - t0, 2)
-                status_box.update(label=f"✓ Complete in {elapsed:.2f}s", state="complete", expanded=False)
+                was_cached = is_cache_hit or bool(final_data.get("cached"))
+                if was_cached:
+                    cache_label = cache_hit_message or "⚡ Instant Semantic Cache Hit (0ms) — Zero LLM Tokens"
+                    status_box.update(label=f"{cache_label} • {elapsed:.2f}s", state="complete", expanded=False)
+                else:
+                    status_box.update(label=f"✓ Complete in {elapsed:.2f}s", state="complete", expanded=False)
 
                 if final_data.get("error"):
                     error_msg = f"❌ **Pipeline Error:** {final_data['error']}"
@@ -785,6 +856,7 @@ with tab_chat:
                         "confidence": 0.0,
                         "latency_s": elapsed,
                         "query_type": "error",
+                        "cached": False,
                     })
                 else:
                     raw_answer = "".join(accumulated_tokens).strip() or final_data.get("answer", "").strip()
@@ -837,8 +909,17 @@ with tab_chat:
 
                     conf_pct = int(conf * 100)
                     conf_color = "#34d399" if conf >= 0.8 else ("#fbbf24" if conf >= 0.5 else "#f87171")
-                    model_used = "llama3.2:3b" if provider_raw == "ollama" else "gemini-flash"
-                    cached_badge = '<span style="background: rgba(16, 185, 129, 0.2); color: #34d399; padding: 2px 7px; border-radius: 4px; font-weight: 600; font-family: monospace;">⚡ CACHED</span>' if final_data.get("cached") else ""
+                    if was_cached:
+                        model_used = "Semantic Cache (0 LLM Tokens)"
+                        cached_badge = (
+                            '<span style="background: rgba(16, 185, 129, 0.22); color: #34d399; '
+                            'border: 1px solid rgba(16, 185, 129, 0.45); padding: 3px 8px; '
+                            'border-radius: 6px; font-weight: 700; font-family: monospace; font-size: 0.72rem;">'
+                            '⚡ CACHE HIT (LLM Bypassed)</span>'
+                        )
+                    else:
+                        model_used = "llama3.2:3b" if provider_raw == "ollama" else "gemini-flash"
+                        cached_badge = ""
 
                     st.markdown(
                         f"""
@@ -869,7 +950,7 @@ with tab_chat:
                         "timestamp": time.strftime("%H:%M:%S"),
                         "query": active_prompt,
                         "latency_s": final_data.get("latency_s", elapsed),
-                        "cached": final_data.get("cached", False),
+                        "cached": was_cached,
                         "confidence": conf,
                         "stage_timings": final_data.get("stage_timings", {}),
                     })
@@ -882,7 +963,7 @@ with tab_chat:
                         "latency_s": final_data.get("latency_s", elapsed),
                         "query_type": qtype,
                         "stage_timings": final_data.get("stage_timings", {}),
-                        "cached": final_data.get("cached", False),
+                        "cached": was_cached,
                     })
 
             except Exception as stream_err:
@@ -902,31 +983,33 @@ with tab_catalog:
         st.info("No documents indexed yet. Use the sidebar dropzone to upload your enterprise PDFs.")
     else:
         for idx, doc in enumerate(indexed_docs):
-            c_info, c_stats, c_actions = st.columns([4, 2, 2])
+            c_info, c_stats, c_scope, c_del = st.columns([5, 2, 2, 2])
             with c_info:
                 st.markdown(f"#### 📄 {doc['filename']}")
                 st.caption("Strategy: Section-Header Semantic Chunking · Index: Qdrant Dense + BM25")
             with c_stats:
                 st.metric("Indexed Chunks", doc["chunk_count"])
-            with c_actions:
-                col_scope_btn, col_del_btn = st.columns(2)
-                with col_scope_btn:
-                    if st.button("🎯 Focus Scope", key=f"scope_btn_{idx}", use_container_width=True):
-                        st.session_state.selected_document = doc["filename"]
-                        st.success(f"Scoped queries to '{doc['filename']}'")
-                        time.sleep(0.4)
-                        st.rerun()
-                with col_del_btn:
-                    if st.button("🗑️ Delete", key=f"del_btn_{idx}", type="secondary", use_container_width=True):
-                        with st.spinner(f"Deleting '{doc['filename']}'..."):
-                            if delete_document_by_name(doc["filename"]):
-                                st.success(f"Deleted '{doc['filename']}'")
-                                if st.session_state.selected_document == doc["filename"]:
-                                    st.session_state.selected_document = None
-                                time.sleep(0.5)
-                                st.rerun()
-                            else:
-                                st.error("Failed to delete document.")
+            with c_scope:
+                st.write("")
+                if st.button("🎯 Focus Scope", key=f"scope_btn_{idx}", use_container_width=True):
+                    st.session_state.selected_document = doc["filename"]
+                    st.success(f"Scoped queries to '{doc['filename']}'")
+                    time.sleep(0.4)
+                    st.rerun()
+            with c_del:
+                st.write("")
+                if st.button("🗑️ Delete", key=f"del_btn_{idx}", type="secondary", use_container_width=True):
+                    with st.spinner(f"Deleting '{doc['filename']}'..."):
+                        if delete_document_by_name(doc["filename"]):
+                            st.cache_data.clear()
+                            st.session_state.uploader_key += 1
+                            st.success(f"Deleted '{doc['filename']}'")
+                            if st.session_state.selected_document == doc["filename"]:
+                                st.session_state.selected_document = None
+                            time.sleep(0.5)
+                            st.rerun()
+                        else:
+                            st.error("Failed to delete document.")
             st.divider()
 
 
